@@ -4,7 +4,7 @@ from conf.config import TEST_SCHEMA
 from lib.sanitize import sanitize_schema_prefixes
 
 
-def run_in_test_env(cursor: extensions.cursor, raw_sql: str) -> Optional[List[Tuple]]:
+def execute(cursor: extensions.cursor, raw_sql: str) -> Optional[List[Tuple]]:
     """
     Finalized Universal Runner:
     - Automatically redirects all SQL to the TEST_SCHEMA.

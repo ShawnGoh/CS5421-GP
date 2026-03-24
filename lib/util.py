@@ -1,5 +1,4 @@
 from psycopg2 import sql, extensions
-
 from conf.config import SOURCE_SCHEMA, TEST_SCHEMA
 
 
