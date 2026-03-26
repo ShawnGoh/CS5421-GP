@@ -1,9 +1,10 @@
-from psycopg2 import sql, extensions
+import psycopg
+from psycopg import sql
 from conf.config import SOURCE_SCHEMA, TEST_SCHEMA
 
 
 def clone_schema(
-    cursor: extensions.cursor, src: str = SOURCE_SCHEMA, dest: str = TEST_SCHEMA
+    cursor: psycopg.Cursor, src: str = SOURCE_SCHEMA, dest: str = TEST_SCHEMA
 ):
     """
     Clones structure from source to destination.
@@ -45,7 +46,7 @@ def clone_schema(
 
 
 def drop_schema(
-    cursor: extensions.cursor,
+    cursor: psycopg.Cursor,
     schema_name: str = TEST_SCHEMA,
     if_exists: bool = True,
     cascade: bool = True,
