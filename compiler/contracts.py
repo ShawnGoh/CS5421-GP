@@ -107,6 +107,39 @@ class FunctionExpr(Expr):
     function_name: str
     args: list[Expr]
 
+@dataclass(frozen=True)
+class UnaryValueExpr(Expr):
+    operator: str
+    expr: Expr
+
+@dataclass(frozen=True)
+class BinaryValueExpr(Expr):
+    left: Expr
+    operator: str
+    right: Expr
+
+@dataclass(frozen=True)
+class LikeExpr(Expr):
+    value: Expr
+    pattern: Expr
+    negated: bool = False
+    case_insensitive: bool = False   # for ILIKE
+
+@dataclass(frozen=True)
+class BoolLiteralExpr(BoolExpr):
+    value: bool | None
+
+@dataclass(frozen=True)
+class IsBoolExpr(BoolExpr):
+    expr: BoolExpr
+    check_for: str   # "TRUE", "FALSE", "UNKNOWN"
+    negated: bool = False
+
+@dataclass(frozen=True)
+class CastExpr(Expr):
+    expr: Expr
+    target_type: str   # "NUMERIC", "TEXT", etc.
+    use_pg_style: bool = True   # True: ::, False: CAST()
 
 # =========================
 # Top-level transformed IR
