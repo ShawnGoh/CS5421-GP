@@ -166,3 +166,52 @@ class OutputCheck:
     function_sql: str
     trigger_sql: str
     combined_sql: str
+
+# =========================
+# Sematic Evaluator
+# =========================
+
+class TruthValue(str, Enum):
+    TRUE = "TRUE"
+    FALSE = "FALSE"
+    UNKNOWN = "UNKNOWN"
+
+# =========================
+# Validator
+# =========================
+
+@dataclass(frozen=True)
+class TestRow:
+    values: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class TestRowExpectation:
+    row: TestRow
+    expected_truth: TruthValue
+    rationale: str
+
+
+@dataclass(frozen=True)
+class TestCaseResult:
+    row: TestRow
+    expected_truth: TruthValue
+    actual_truth: TruthValue | None
+    expected_pass: bool
+    actual_pass: bool
+    rationale: str
+    execution_message: str = ""
+
+
+@dataclass(frozen=True)
+class ValidationRequest:
+    constraint: TransformedCheckConstraint
+    artifacts: GeneratedCheckArtifacts
+
+
+@dataclass(frozen=True)
+class ValidationResult:
+    success: bool
+    test_case_results: list[TestCaseResult]
+    errors: list[str]
+    summary: str
