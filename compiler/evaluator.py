@@ -1,6 +1,6 @@
 import re
 
-from contracts import (
+from compiler.contracts import (
     AndExpr,
     BetweenExpr,
     BinaryValueExpr,

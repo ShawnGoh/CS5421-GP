@@ -141,6 +141,11 @@ class CastExpr(Expr):
     target_type: str   # "NUMERIC", "TEXT", etc.
     use_pg_style: bool = True   # True: ::, False: CAST()
 
+@dataclass(frozen=True)
+class ExistsExpr(BoolExpr):
+    query_sql: str
+    negated: bool = False
+
 # =========================
 # Top-level transformed IR
 # =========================
@@ -215,3 +220,20 @@ class ValidationResult:
     test_case_results: list[TestCaseResult]
     errors: list[str]
     summary: str
+
+
+@dataclass(frozen=True)
+class SqlTestCase:
+    name: str
+    setup_sql: list[str]
+    candidate_sql: list[str]
+    expected_pass: bool
+    rationale: str
+
+@dataclass(frozen=True)
+class SqlTestCaseResult:
+    name: str
+    expected_pass: bool
+    actual_pass: bool
+    rationale: str
+    execution_message: str = ""

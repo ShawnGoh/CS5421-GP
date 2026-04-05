@@ -1,4 +1,9 @@
-from contracts import TestRow, TestRowExpectation, TruthValue
+from compiler.contracts import (
+    TestRow, 
+    TestRowExpectation, 
+    TruthValue, 
+    SqlTestCase
+)
 
 class TestCaseGenerator:
     def generate(self, constraint):
@@ -246,6 +251,142 @@ class TestCaseGenerator:
                     row=TestRow({"code": None}),
                     expected_truth=TruthValue.UNKNOWN,
                     rationale="CAST(NULL AS TEXT) is NULL, and NULL <> '' is UNKNOWN under SQL semantics",
+                ),
+            ]
+
+        return []
+
+    def generate_create_table_sql(self, constraint):
+        if constraint.constraint_name == "fd_position_salary":
+            return """
+DROP TABLE IF EXISTS employees CASCADE;
+
+CREATE TABLE employees (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    position TEXT NOT NULL,
+    salary NUMERIC NOT NULL
+);
+""".strip()
+
+        raise ValueError(f"No create table SQL configured for constraint: {constraint.constraint_name}")
+
+
+    def generate_exists_test_cases(self, constraint):
+        name = constraint.constraint_name
+
+        if name == "fd_position_salary":
+            return [
+                SqlTestCase(
+                    name="empty_table",
+                    setup_sql=[],
+                    candidate_sql=[],
+                    expected_pass=True,
+                    rationale="Empty table has no violating pairs",
+                ),
+                SqlTestCase(
+                    name="single_row",
+                    setup_sql=[],
+                    candidate_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)"
+                    ],
+                    expected_pass=True,
+                    rationale="Single row cannot violate FD",
+                ),
+                SqlTestCase(
+                    name="valid_same_salary",
+                    setup_sql=[],
+                    candidate_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 5000)",
+                    ],
+                    expected_pass=True,
+                    rationale="Same position, same salary is valid",
+                ),
+                SqlTestCase(
+                    name="invalid_different_salary",
+                    setup_sql=[],
+                    candidate_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 6000)",
+                    ],
+                    expected_pass=False,
+                    rationale="Same position but different salary violates FD",
+                ),
+                SqlTestCase(
+                    name="insert_after_valid_fails",
+                    setup_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 5000)",
+                    ],
+                    candidate_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Carol', 'Engineer', 7000)"
+                    ],
+                    expected_pass=False,
+                    rationale="New row introduces FD violation",
+                ),
+                SqlTestCase(
+                    name="update_creates_violation",
+                    setup_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 5000)",
+                    ],
+                    candidate_sql=[
+                        "UPDATE employees SET salary = 7000 WHERE name = 'Bob'"
+                    ],
+                    expected_pass=False,
+                    rationale="Update introduces FD violation",
+                ),
+                SqlTestCase(
+                    name="update_same_value_pass",
+                    setup_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 5000)",
+                    ],
+                    candidate_sql=[
+                        "UPDATE employees SET salary = 5000 WHERE name = 'Bob'"
+                    ],
+                    expected_pass=True,
+                    rationale="No change → still valid",
+                ),
+                SqlTestCase(
+                    name="deferred_valid_transaction",
+                    setup_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 5000)",
+                    ],
+                    candidate_sql=[
+                        "UPDATE employees SET salary = 7000 WHERE name = 'Bob'",
+                        "UPDATE employees SET salary = 7000 WHERE name = 'Alice'",
+                    ],
+                    expected_pass=True,
+                    rationale="Final state valid, deferred trigger allows it",
+                ),
+                SqlTestCase(
+                    name="deferred_invalid_transaction",
+                    setup_sql=[
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 5000)",
+                    ],
+                    candidate_sql=[
+                        "UPDATE employees SET salary = 7000 WHERE name = 'Bob'"
+                    ],
+                    expected_pass=False,
+                    rationale="Final state invalid → fails at commit",
+                ),
+                SqlTestCase(
+                    name="delete_removes_violation",
+                    setup_sql=[
+                        "ALTER TABLE employees DISABLE TRIGGER trigger_employees_fd_position_salary",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Alice', 'Engineer', 5000)",
+                        "INSERT INTO employees (name, position, salary) VALUES ('Bob', 'Engineer', 6000)",
+                        "ALTER TABLE employees ENABLE TRIGGER trigger_employees_fd_position_salary",
+                    ],
+                    candidate_sql=[
+                        "DELETE FROM employees WHERE name = 'Bob'"
+                    ],
+                    expected_pass=True,
+                    rationale="Delete removes violation",
                 ),
             ]
 

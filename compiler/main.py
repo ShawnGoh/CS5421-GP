@@ -1,4 +1,4 @@
-from contracts import (
+from compiler.contracts import (
     AndExpr,
     BetweenExpr,
     BinaryValueExpr,
@@ -7,6 +7,7 @@ from contracts import (
     CastExpr,
     ColumnExpr,
     CompareExpr,
+    ExistsExpr,
     Expr,
     LikeExpr,
     FunctionExpr,
@@ -22,11 +23,11 @@ from contracts import (
     OutputCheck,
 )
 
-from codegen import CheckCodeGenerator
-from evaluator import ConstraintSemanticEvaluator
-from testgenerator import TestCaseGenerator
-from validator import ConstraintValidator
-from contracts import ValidationRequest
+from compiler.codegen import CheckCodeGenerator
+from compiler.evaluator import ConstraintSemanticEvaluator
+from compiler.testgenerator import TestCaseGenerator
+from compiler.validator import CheckValidator
+from compiler.contracts import ValidationRequest
 
 # assume constraints list already exists
 constraints = []
@@ -197,11 +198,43 @@ constraints.append(
     )
 )
 
+sql_constraint = TransformedCheckConstraint(
+    table_name="employees",
+    constraint_name="fd_position_salary",
+    condition=ExistsExpr(
+        query_sql="""
+SELECT *
+FROM employees e1, employees e2
+WHERE e1.position = e2.position
+  AND e1.salary <> e2.salary
+""",
+        negated=True,
+    ),
+    referenced_columns=[],
+    original_check_sql="""
+CHECK NOT EXISTS (
+  SELECT *
+  FROM employees e1, employees e2
+  WHERE e1.position = e2.position
+    AND e1.salary <> e2.salary
+)
+""".strip(),
+)
+
 
 generator = CheckCodeGenerator()
 evaluator = ConstraintSemanticEvaluator()
 test_generator = TestCaseGenerator()
-validator = ConstraintValidator(evaluator, test_generator)
+validator = CheckValidator(evaluator, test_generator)
+
+sql_artifact = generator.generate(sql_constraint)
+print("=== FUNCTION SQL ===")
+print(sql_artifact.function_sql)
+print("\n=== TRIGGER SQL ===")
+print(sql_artifact.trigger_sql)
+print("\n=== COMBINED SQL ===")
+print(sql_artifact.combined_sql)
+
 
 for constraint in constraints:
     artifacts = generator.generate(constraint)
