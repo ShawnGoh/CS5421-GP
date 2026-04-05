@@ -39,14 +39,18 @@ def main():
         # 2. Initial Validation (Dry-Run)
         validate_input_sql(input_sql)
 
-        # 3. Compiler Pipeline (Placeholders for your next steps)
+        # 3. Parser
         # parsed_ast = parse_sql(input_sql)
-        # generated_sql = generate_compiler_logic(parsed_ast)
+        
+        # 4. Generate SQL from AST
 
-        # 4. Final Validation of Generated Logic
-        # validate_sql(cursor=cur, raw_sql=generated_sql)
+        # 5. Validate transformedCheckConstraint instance
 
         print("[+] Compilation and validation successful.")
+        
+        # 6. Performance test
+
+        # Execute the generated SQL?
 
     except Exception as e:
         print(f"[-] Compiler Error: {e}")
