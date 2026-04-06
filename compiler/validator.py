@@ -47,7 +47,7 @@ class CheckValidator:
         return ValidationResult(
             success=success,
             test_case_results=results,
-            sql_test_case_results=None,
+            sql_test_case_results=[],
             errors=errors,
             summary=summary,
         )
@@ -121,13 +121,12 @@ class CheckValidator:
 
         success = all(r.expected_pass == r.actual_pass for r in sql_test_case_results)
 
+        summary = f"Validated {len(sql_test_case_results)} test cases. Success={success}."
+
         return ValidationResult(
             success=success,
             test_case_results=[],
             sql_test_case_results=sql_test_case_results,
             errors=errors,
-            summary=(
-                f"{sum(r.expected_pass == r.actual_pass for r in sql_test_case_results)}"
-                f"/{len(sql_test_case_results)} EXISTS test cases passed"
-            ),
+            summary=summary,
         )
