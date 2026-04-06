@@ -15,22 +15,17 @@ from compiler.contracts import (
     BetweenExpr,
     InExpr,
     CastExpr,
-    Token
+    Token,
+    BoolLiteralExpr
 )
 
 KEYWORDS = {
-    "AND",
-    "OR",
-    "NOT",
-    "IS",
-    "NULL",
-    "TRUE",
-    "FALSE",
-    "LIKE",
-    "UNKNOWN",
+    "AND", "OR", "NOT", "IS", "NULL", "TRUE", "FALSE",
+    "LIKE", "UNKNOWN", "IN", "BETWEEN",
+    "CAST", "AS",
 }
 
-TWO_CHAR_OPS = {">=", "<=", "<>", "!="}
+TWO_CHAR_OPS = {"::", ">=", "<=", "<>", "!="}
 ONE_CHAR_OPS = {"=", ">", "<", "+", "-"}
 
 unsupported = ["SELECT", "EXISTS", "FROM", "WHERE"]
@@ -156,7 +151,12 @@ def tokenize(text: str) -> list[Token]:
             else:
                 tokens.append(Token("IDENT", word, start))
             continue
-
+        
+        if ch == ",":
+            tokens.append(Token("COMMA", ",", i))
+            i += 1
+            continue
+        
         # 10. unknown character
         raise ValueError(f"Unexpected character {ch!r} at position {i}")
 
@@ -179,6 +179,9 @@ def collect_referenced_columns(expr: Expr) -> list[str]:
 
             case LiteralExpr():
                 pass
+            
+            case BoolLiteralExpr():
+                pass    
 
             case CompareExpr(left=left, right=right):
                 visit(left)

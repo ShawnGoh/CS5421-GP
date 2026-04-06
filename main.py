@@ -93,7 +93,7 @@ def main():
     
     statements = split_sql_statements(sql_text)
     
-    transformedCheckConstraint = []
+    transformedCheckConstraints = []
     
     for stmt in statements:
         schema = None
@@ -121,7 +121,7 @@ def main():
                     else:
                         referenced_columns.append((column_name, "UNKNOWN"))
                         
-                transformedCheckConstraint.append(
+                transformedCheckConstraints.append(
                     TransformedCheckConstraint(
                             table_name = raw_check.table_name,
                             constraint_name = raw_check.constraint_name,
@@ -130,7 +130,9 @@ def main():
                             original_check_sql = raw_check.original_check_sql
                 ))
     
-    log(f"Total sql statements converted to TransformedCheckConstraint: {len(transformedCheckConstraint)}", LogTag.INFO)
-
+    log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)
+    for i in transformedCheckConstraints:
+        print(i.condition)
+        print()
 if __name__ == "__main__":
     main()
