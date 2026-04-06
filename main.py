@@ -96,8 +96,12 @@ def main():
     transformedCheckConstraint = []
     
     for stmt in statements:
+        schema = None
         classified_statement = classify_and_extract(stmt)
         raw_checks = extract_raw_checks_from_statement(classified_statement)
+        if classified_statement.statement_type == StatementType.CREATE_TABLE:
+            schema = extract_table_schema_from_original_sql(classified_statement.original_sql)
+                    
         for raw_check in raw_checks:
             try:
                 reject_unsupported_features(raw_check.check_expr_sql)
@@ -109,7 +113,15 @@ def main():
             if tokens:
                 parser = CheckExprParser(tokens)
                 condition = parser.parse() 
-                referenced_columns = collect_referenced_columns(condition)
+                referenced_column_names = collect_referenced_columns(condition)
+                referenced_columns = []
+                for column_name in referenced_column_names:
+                    if schema:
+                        referenced_columns.append((column_name, schema.get(column_name)))    
+                    else:
+                        referenced_columns.append((column_name, "UNKNOWN"))
+                        
+                print(referenced_columns)
                 transformedCheckConstraint.append(
                     TransformedCheckConstraint(
                             table_name = raw_check.table_name,

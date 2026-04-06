@@ -163,7 +163,6 @@ def tokenize(text: str) -> list[Token]:
     tokens.append(Token("EOF", "", max_pos))
     return tokens
 
-
 def collect_referenced_columns(expr: Expr) -> list[str]:
     seen = set()
     ordered = []
@@ -174,76 +173,66 @@ def collect_referenced_columns(expr: Expr) -> list[str]:
             ordered.append(name)
 
     def visit(node: Expr):
-        if isinstance(node, ColumnExpr):
-            add(node.original_name)
-            return
+        match node:
+            case ColumnExpr():
+                add(node.original_name)
 
-        if isinstance(node, LiteralExpr):
-            return
+            case LiteralExpr():
+                pass
 
-        if isinstance(node, CompareExpr):
-            visit(node.left)
-            visit(node.right)
-            return
+            case CompareExpr(left=left, right=right):
+                visit(left)
+                visit(right)
 
-        if isinstance(node, AndExpr):
-            visit(node.left)
-            visit(node.right)
-            return
+            case AndExpr(left=left, right=right):
+                visit(left)
+                visit(right)
 
-        if isinstance(node, OrExpr):
-            visit(node.left)
-            visit(node.right)
-            return
+            case OrExpr(left=left, right=right):
+                visit(left)
+                visit(right)
 
-        if isinstance(node, NotExpr):
-            visit(node.expr)
-            return
+            case NotExpr(expr=expr):
+                visit(expr)
 
-        if isinstance(node, IsNullExpr):
-            visit(node.expr)
-            return
+            case IsNullExpr(expr=expr):
+                visit(expr)
 
-        if isinstance(node, IsBoolExpr):
-            visit(node.expr)
-            return
+            case IsBoolExpr(expr=expr):
+                visit(expr)
 
-        if isinstance(node, LikeExpr):
-            visit(node.value)
-            visit(node.pattern)
-            return
+            case LikeExpr(value=value, pattern=pattern):
+                visit(value)
+                visit(pattern)
 
-        if isinstance(node, UnaryValueExpr):
-            visit(node.expr)
-            return
+            case UnaryValueExpr(expr=expr):
+                visit(expr)
 
-        if isinstance(node, BinaryValueExpr):
-            visit(node.left)
-            visit(node.right)
-            return
+            case BinaryValueExpr(left=left, right=right):
+                visit(left)
+                visit(right)
 
-        if isinstance(node, FunctionExpr):
-            for arg in node.args:
-                visit(arg)
-            return
+            case FunctionExpr(args=args):
+                for arg in args:
+                    visit(arg)
 
-        if isinstance(node, BetweenExpr):
-            visit(node.value)
-            visit(node.lower)
-            visit(node.upper)
-            return
+            case BetweenExpr(value=value, lower=lower, upper=upper):
+                visit(value)
+                visit(lower)
+                visit(upper)
 
-        if isinstance(node, InExpr):
-            visit(node.value)
-            for opt in node.options:
-                visit(opt)
-            return
+            case InExpr(value=value, options=options):
+                visit(value)
+                for opt in options:
+                    visit(opt)
 
-        if isinstance(node, CastExpr):
-            visit(node.expr)
-            return
+            case CastExpr(expr=expr):
+                visit(expr)
 
-        raise ValueError(f"Unsupported node type in column collector: {type(node).__name__}")
+            case _:
+                raise ValueError(
+                    f"Unsupported node type in column collector: {type(node).__name__}"
+                )
 
     visit(expr)
     return ordered
