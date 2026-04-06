@@ -121,7 +121,6 @@ def main():
                     else:
                         referenced_columns.append((column_name, "UNKNOWN"))
                         
-                print(referenced_columns)
                 transformedCheckConstraint.append(
                     TransformedCheckConstraint(
                             table_name = raw_check.table_name,
