@@ -1,4 +1,22 @@
-from compiler.contracts import Token
+from compiler.contracts import (
+    Expr,
+    ColumnExpr,
+    LiteralExpr,
+    CompareExpr,
+    AndExpr,
+    OrExpr,
+    NotExpr,
+    IsNullExpr,
+    IsBoolExpr,
+    LikeExpr,
+    UnaryValueExpr,
+    BinaryValueExpr,
+    FunctionExpr,
+    BetweenExpr,
+    InExpr,
+    CastExpr,
+    Token
+)
 
 KEYWORDS = {
     "AND",
@@ -144,3 +162,88 @@ def tokenize(text: str) -> list[Token]:
 
     tokens.append(Token("EOF", "", max_pos))
     return tokens
+
+
+def collect_referenced_columns(expr: Expr) -> list[str]:
+    seen = set()
+    ordered = []
+
+    def add(name: str):
+        if name not in seen:
+            seen.add(name)
+            ordered.append(name)
+
+    def visit(node: Expr):
+        if isinstance(node, ColumnExpr):
+            add(node.original_name)
+            return
+
+        if isinstance(node, LiteralExpr):
+            return
+
+        if isinstance(node, CompareExpr):
+            visit(node.left)
+            visit(node.right)
+            return
+
+        if isinstance(node, AndExpr):
+            visit(node.left)
+            visit(node.right)
+            return
+
+        if isinstance(node, OrExpr):
+            visit(node.left)
+            visit(node.right)
+            return
+
+        if isinstance(node, NotExpr):
+            visit(node.expr)
+            return
+
+        if isinstance(node, IsNullExpr):
+            visit(node.expr)
+            return
+
+        if isinstance(node, IsBoolExpr):
+            visit(node.expr)
+            return
+
+        if isinstance(node, LikeExpr):
+            visit(node.value)
+            visit(node.pattern)
+            return
+
+        if isinstance(node, UnaryValueExpr):
+            visit(node.expr)
+            return
+
+        if isinstance(node, BinaryValueExpr):
+            visit(node.left)
+            visit(node.right)
+            return
+
+        if isinstance(node, FunctionExpr):
+            for arg in node.args:
+                visit(arg)
+            return
+
+        if isinstance(node, BetweenExpr):
+            visit(node.value)
+            visit(node.lower)
+            visit(node.upper)
+            return
+
+        if isinstance(node, InExpr):
+            visit(node.value)
+            for opt in node.options:
+                visit(opt)
+            return
+
+        if isinstance(node, CastExpr):
+            visit(node.expr)
+            return
+
+        raise ValueError(f"Unsupported node type in column collector: {type(node).__name__}")
+
+    visit(expr)
+    return ordered

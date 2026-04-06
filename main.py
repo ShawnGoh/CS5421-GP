@@ -9,7 +9,7 @@ from compiler.contracts import StatementType, TableRef, ClassifiedStatement
 from parser_transformer.classifier import classify_and_extract
 from parser_transformer.file_parser import split_sql_statements
 from parser_transformer.extractor import extract_raw_checks_from_statement, extract_table_schema_from_original_sql
-from parser_transformer.transformer import tokenize, reject_unsupported_features
+from parser_transformer.transformer import tokenize, reject_unsupported_features, collect_referenced_columns
 from parser_transformer.tokens_parser import CheckExprParser
 from compiler.contracts import Token, BoolExpr, OrExpr, AndExpr, CompareExpr, ColumnExpr, LiteralExpr, LikeExpr, LiteralType, TransformedCheckConstraint
 
@@ -109,15 +109,17 @@ def main():
             if tokens:
                 parser = CheckExprParser(tokens)
                 condition = parser.parse() 
+                referenced_columns = collect_referenced_columns(condition)
                 transformedCheckConstraint.append(
                     TransformedCheckConstraint(
                             table_name = raw_check.table_name,
                             constraint_name = raw_check.constraint_name,
                             condition = condition,
-                            referenced_columns = [],
+                            referenced_columns = referenced_columns,
                             original_check_sql = raw_check.original_check_sql
                 ))
-                print(transformedCheckConstraint)
+    
+    log(f"Total sql statements converted to TransformedCheckConstraint: {len(transformedCheckConstraint)}", LogTag.INFO)
 
 if __name__ == "__main__":
     main()
