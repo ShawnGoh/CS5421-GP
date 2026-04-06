@@ -217,7 +217,8 @@ class ValidationRequest:
 @dataclass(frozen=True)
 class ValidationResult:
     success: bool
-    test_case_results: list[TestCaseResult]
+    test_case_results: list[TestCaseResult] | None
+    sql_test_case_results: list[SqlTestCaseResult] | None
     errors: list[str]
     summary: str
 

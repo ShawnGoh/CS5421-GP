@@ -2,6 +2,7 @@ from compiler.contracts import (
     TestCaseResult,
     ValidationResult,
     TruthValue,
+    SqlTestCase,
     SqlTestCaseResult
 )
 
@@ -54,8 +55,8 @@ class CheckValidator:
         return truth_value != TruthValue.FALSE
 
     def validate_exists_constraint(self, constraint, artifacts, db_conn) -> ValidationResult:
-        create_table_sql = self.generate_create_table_sql(constraint)  # Replace with create sql from input/parser
-        test_cases = self.generate_exists_test_cases(constraint)
+        create_table_sql = self.test_case_generator.generate_create_table_sql(constraint)  # Replace with create sql from input/parser
+        test_cases = self.test_case_generator.generate_exists_test_cases(constraint)
 
         errors = []
         sql_test_case_results = []

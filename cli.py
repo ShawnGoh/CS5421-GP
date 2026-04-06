@@ -57,10 +57,8 @@ CHECK NOT EXISTS (
             f"{test_result.name}: "
             f"expected={test_result.expected_pass}, "
             f"actual={test_result.actual_pass}, "
-            f"ok={ok}"
+            f"test passed={ok}"
         )
-        if test_result.execution_message:
-            print(f"  message: {test_result.execution_message}")
 
 def main():
     parser = argparse.ArgumentParser(description="Auto-Column Discovery SQL Compiler")
