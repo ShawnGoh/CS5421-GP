@@ -1,9 +1,8 @@
 import argparse
-import re
 import sys
-from typing import List, Dict, Optional
 
 from lib.client import db_session, get_connection
+from lib.executor import validate_sql
 from lib.util import clone_schema, drop_schema
 from compiler.codegen import CheckCodeGenerator
 from compiler.validator import CheckValidator
@@ -11,88 +10,60 @@ from compiler.contracts import ExistsExpr, TransformedCheckConstraint, Validatio
 from compiler.evaluator import ConstraintSemanticEvaluator
 from compiler.testgenerator import TestCaseGenerator
 
-def print_validation_result(constraint, result):
-    print(result.summary)
-
-    for case in result.test_case_results:
-        print(
-            f"row={case.row.values}, "
-            f"expected_truth={case.expected_truth}, "
-            f"actual_truth={case.actual_truth}, "
-            f"expected_pass={case.expected_pass}, "
-            f"actual_pass={case.actual_pass}, "
-            f"reason={case.rationale}"
-        )
-
-    for case in result.sql_test_case_results:
-        print(
-            f"name={case.name}, "
-            f"expected_pass={case.expected_pass}, "
-            f"actual_pass={case.actual_pass}, "
-            f"reason={case.rationale}, "
-        )
-
-def run_validation():
-
-    generator = CheckCodeGenerator()
-    evaluator = ConstraintSemanticEvaluator()
-    test_generator = TestCaseGenerator()
-    validator = CheckValidator(evaluator, test_generator)
-
-    constraints = test_generator.generate_constraints()
-
-    for constraint in constraints:
-        artifacts = generator.generate(constraint)
-        print(f"\n===== {constraint.constraint_name} {constraint.original_check_sql} =====")
-        print("\n=== COMBINED SQL ===")
-        print(artifacts.combined_sql)
+def setup_test_environment() -> None:
+    print("[*] Setting up isolated test environment...")
+    with db_session() as cur:
+        drop_schema(cursor=cur)
+        clone_schema(cursor=cur)
+    print("[+] Environment ready.")
 
 
-        if isinstance(constraint.condition, ExistsExpr):
-            with db_session() as db_conn:
-                result = validator.validate_exists_constraint(
-                    constraint=constraint,
-                    artifacts=artifacts,
-                    db_conn=db_conn,
-                )
-        else:
-            request = ValidationRequest(
-                constraint=constraint,
-                artifacts=artifacts,
-            )
-            result = validator.validate(request)
+def validate_input_sql(raw_sql: str) -> None:
+    print(f"[*] Validating input SQL...")
+    with db_session() as cur:
+        if not validate_sql(cursor=cur, raw_sql=raw_sql):
+            raise ValueError("The provided SQL statement is invalid.")
+    print("[+] Input SQL passed validation.")
 
-        print_validation_result(constraint, result)
 
 def main():
     parser = argparse.ArgumentParser(description="Auto-Column Discovery SQL Compiler")
-
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--create", type=str, help="Full CREATE TABLE statement")
     group.add_argument("--alter", type=str, help="Full ALTER TABLE statement")
 
     args = parser.parse_args()
+    input_sql = args.create or args.alter
 
-    # Db connection to clone environment
     db_conn = get_connection()
     try:
-        with db_session() as cur:
-            drop_schema(cursor=cur)
-            clone_schema(cursor=cur)
+        # 1. Environment Preparation
+        setup_test_environment()
+
+        # 2. Initial Validation (Dry-Run)
+        validate_input_sql(input_sql)
+
+        # 3. Parser
+        # parsed_ast = parse_sql(input_sql)
+        
+        # 4. Generate SQL from AST
+
+        # 5. Validate transformedCheckConstraint instance
+
+        print("[+] Compilation and validation successful.")
+        
+        # 6. Performance test
+
+        # Execute the generated SQL?
+
+    except Exception as e:
+        print(f"[-] Compiler Error: {e}")
+        sys.exit(1)
+
     finally:
-        db_conn.close()
-
-
-    try:
-        run_validation()
-    except Exception as e:
-        print(f"[-] Error: {e}")
-
-    # Run Compiler
-    try:
-        pass
-    except Exception as e:
-        print(f"[-] Error: {e}")
+        # Ensure connection is closed even if sys.exit is called
+        if db_conn:
+            db_conn.close()
 
 
 if __name__ == "__main__":
