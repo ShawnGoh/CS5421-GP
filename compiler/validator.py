@@ -47,6 +47,7 @@ class CheckValidator:
         return ValidationResult(
             success=success,
             test_case_results=results,
+            sql_test_case_results=None,
             errors=errors,
             summary=summary,
         )
