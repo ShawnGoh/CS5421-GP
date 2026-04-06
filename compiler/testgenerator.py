@@ -234,8 +234,8 @@ class TestCaseGenerator:
                 ),
                 TestRowExpectation(
                     row=TestRow({"is_active": None}),
-                    expected_truth=TruthValue.UNKNOWN,
-                    rationale="NULL IS TRUE is FALSE",
+                    expected_truth=TruthValue.FALSE,
+                    rationale="NULL IS TRUE evaluates to FALSE",
                 ),
             ]
 
@@ -280,6 +280,68 @@ class TestCaseGenerator:
         return []
 
     def generate_create_table_sql(self, constraint):
+        if constraint.table_name == "products":
+            return """
+DROP TABLE IF EXISTS products CASCADE;
+
+CREATE TABLE products (
+    id BIGSERIAL PRIMARY KEY,
+    price NUMERIC,
+    discounted_price NUMERIC,
+    discount NUMERIC,
+    status TEXT
+);
+""".strip()
+
+        if constraint.table_name == "users":
+            return """
+DROP TABLE IF EXISTS users CASCADE;
+
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    email TEXT
+);
+""".strip()
+
+        if constraint.table_name == "flags":
+            return """
+DROP TABLE IF EXISTS flags CASCADE;
+
+CREATE TABLE flags (
+    id BIGSERIAL PRIMARY KEY
+);
+""".strip()
+
+        if constraint.table_name == "accounts":
+            return """
+DROP TABLE IF EXISTS accounts CASCADE;
+
+CREATE TABLE accounts (
+    id BIGSERIAL PRIMARY KEY,
+    is_active BOOLEAN
+);
+""".strip()
+
+        if constraint.table_name == "payments":
+            return """
+DROP TABLE IF EXISTS payments CASCADE;
+
+CREATE TABLE payments (
+    id BIGSERIAL PRIMARY KEY,
+    amount NUMERIC
+);
+""".strip()
+
+        if constraint.table_name == "items":
+            return """
+DROP TABLE IF EXISTS items CASCADE;
+
+CREATE TABLE items (
+    id BIGSERIAL PRIMARY KEY,
+    code NUMERIC
+);
+""".strip()
+
         if constraint.constraint_name == "fd_position_salary":
             return """
 DROP TABLE IF EXISTS employees CASCADE;
@@ -294,6 +356,51 @@ CREATE TABLE employees (
 
         raise ValueError(f"No create table SQL configured for constraint: {constraint.constraint_name}")
 
+    def generate_sql_test_cases_from_row_expectations(
+        self,
+        constraint,
+        row_expectations) -> list[SqlTestCase]:
+        table_name = constraint.table_name
+        sql_test_cases = []
+
+        for i, case in enumerate(row_expectations, start=1):
+            columns = []
+            values = []
+
+            for col, value in case.row.values.items():
+                columns.append(col)
+
+                if value is None:
+                    values.append("NULL")
+                elif isinstance(value, bool):
+                    values.append("TRUE" if value else "FALSE")
+                elif isinstance(value, (int, float)):
+                    values.append(str(value))
+                else:
+                    escaped = str(value).replace("'", "''")
+                    values.append(f"'{escaped}'")
+
+            if not columns:
+                insert_sql = f"INSERT INTO {constraint.table_name} DEFAULT VALUES"
+            else:
+                insert_sql = (
+                    f"INSERT INTO {constraint.table_name} ({', '.join(columns)}) "
+                    f"VALUES ({', '.join(values)})"
+                )
+
+            expected_pass = case.expected_truth != TruthValue.FALSE
+
+            sql_test_cases.append(
+                SqlTestCase(
+                    name=f"{constraint.constraint_name}_row_case_{i}",
+                    setup_sql=[],
+                    candidate_sql=[insert_sql],
+                    expected_pass=expected_pass,
+                    rationale=case.rationale,
+                )
+            )
+
+        return sql_test_cases
 
     def generate_exists_test_cases(self, constraint):
         name = constraint.constraint_name

@@ -40,7 +40,10 @@ class CheckCodeGenerator:
         else:
             procedure_sql = self._build_procedure_sql(constraint, procedure_name)
             # condition_sql = self._emit_bool_expr(constraint.condition)
-            function_sql = self._build_trigger_function_sql(constraint, procedure_name, function_name)
+            if len(constraint.referenced_columns) == 0:
+                function_sql = self._build_noarg_before_trigger_function_sql(procedure_name, function_name)
+            else:
+                function_sql = self._build_trigger_function_sql(constraint, procedure_name, function_name)
             trigger_sql = self._build_trigger_sql(trigger_name, constraint.table_name, function_name)
 
         combined_sql = procedure_sql + "\n\n" + function_sql + "\n\n" + trigger_sql
@@ -58,17 +61,22 @@ class CheckCodeGenerator:
     def _build_procedure_sql(self, constraint: TransformedCheckConstraint, procedure_name: str) -> str:
         params_sql = self._build_procedure_params(constraint.referenced_columns)
         condition_sql = self._emit_bool_expr_for_procedure(constraint.condition)
-        escaped_message = constraint.original_check_sql.replace("'", "''")
+        escaped_message = constraint.original_check_sql.replace("'", "''").replace("%", "%%")
+
+        if params_sql.strip():
+            procedure_header = f"""CREATE OR REPLACE PROCEDURE {procedure_name}(
+        {params_sql}
+)"""
+        else:
+            procedure_header = f"CREATE OR REPLACE PROCEDURE {procedure_name}()"
 
         return f"""
-CREATE OR REPLACE PROCEDURE {procedure_name}(
-    {params_sql}
-)
+{procedure_header}
 LANGUAGE plpgsql
 AS $$
 BEGIN
     IF ({condition_sql}) IS FALSE THEN
-        RAISE EXCEPTION 'CHECK constraint violated: {escaped_message}';
+        RAISE EXCEPTION USING MESSAGE = 'CHECK constraint violated: {escaped_message}';
     END IF;
 END;
 $$;
@@ -110,6 +118,21 @@ BEGIN
     CALL {procedure_name}(
         {call_args}
     );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+""".strip()
+
+    def _build_noarg_before_trigger_function_sql(
+        self,
+        procedure_name: str,
+        function_name: str,
+    ) -> str:
+        return f"""
+CREATE OR REPLACE FUNCTION {function_name}()
+RETURNS TRIGGER AS $$
+BEGIN
+    CALL {procedure_name}();
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -266,7 +289,7 @@ EXECUTE FUNCTION {function_name}();
             return str(expr.value)
 
         if expr.literal_type == LiteralType.STRING:
-            escaped = str(expr.value).replace("'", "''")
+            escaped = str(expr.value).replace("'", "''").replace("%", "%%")
             return f"'{escaped}'"
 
         raise ValueError(f"Unsupported literal type: {expr.literal_type}")

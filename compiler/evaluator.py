@@ -87,12 +87,18 @@ class ConstraintSemanticEvaluator:
             if value is None or pattern is None:
                 return TruthValue.UNKNOWN
 
-            regex = self._like_to_regex(str(pattern))
-            flags = re.IGNORECASE if expr.case_insensitive else 0
-            matched = re.fullmatch(regex, str(value), flags=flags) is not None
+            value = str(value)
+            pattern = str(pattern)
 
-            result = TruthValue.TRUE if matched else TruthValue.FALSE
-            return self._not_truth(result) if expr.negated else result
+            regex = self._sql_like_to_regex(pattern)
+            flags = re.IGNORECASE if expr.case_insensitive else 0
+
+            matched = re.match(regex, value, flags) is not None
+
+            if expr.negated:
+                matched = not matched
+
+            return TruthValue.TRUE if matched else TruthValue.FALSE
 
         if isinstance(expr, IsBoolExpr):
             val = self._eval_truth_target(expr.expr, row)
@@ -250,9 +256,20 @@ class ConstraintSemanticEvaluator:
 
     def _like_to_regex(self, pattern: str) -> str:
         escaped = re.escape(pattern)
-        escaped = escaped.replace(r"\%", ".*")
+        escaped = escaped.replace(r"\%%", ".*")
         escaped = escaped.replace(r"\_", ".")
         return escaped  
+
+    def _sql_like_to_regex(self, pattern: str) -> str:
+        regex = ""
+        for ch in pattern:
+            if ch == "%":
+                regex += ".*"
+            elif ch == "_":
+                regex += "."
+            else:
+                regex += re.escape(ch)
+        return "^" + regex + "$"
 
 
 
