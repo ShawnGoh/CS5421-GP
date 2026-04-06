@@ -8,6 +8,7 @@ KEYWORDS = {
     "NULL",
     "TRUE",
     "FALSE",
+    "LIKE",
     "UNKNOWN",
 }
 
