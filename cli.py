@@ -12,7 +12,6 @@ from compiler.evaluator import ConstraintSemanticEvaluator
 from compiler.testgenerator import TestCaseGenerator
 
 def print_validation_result(constraint, result):
-    print(f"\n===== {constraint.constraint_name} {constraint.original_check_sql} =====")
     print(result.summary)
 
     for case in result.test_case_results:
@@ -44,6 +43,10 @@ def run_validation():
 
     for constraint in constraints:
         artifacts = generator.generate(constraint)
+        print(f"\n===== {constraint.constraint_name} {constraint.original_check_sql} =====")
+        print("\n=== COMBINED SQL ===")
+        print(artifacts.combined_sql)
+
 
         if isinstance(constraint.condition, ExistsExpr):
             with db_session() as db_conn:
