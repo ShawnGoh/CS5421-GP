@@ -15,7 +15,7 @@ def get_connection() -> psycopg.Connection:
     )
 
     try:
-        conn = psycopg.connect(conn_str, autocommit=True)
+        conn = psycopg.connect(conn_str, autocommit=False) # set as false for validator deferred checks
         print(f"[+] Connected to psycopg3: {DB_NAME}")
         return conn
     except Exception as e:

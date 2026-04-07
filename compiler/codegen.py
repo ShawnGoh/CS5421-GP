@@ -1,4 +1,4 @@
-from contracts import (
+from compiler.contracts import (
     AndExpr,
     BetweenExpr,
     BinaryValueExpr,
@@ -7,6 +7,7 @@ from contracts import (
     CastExpr,
     ColumnExpr,
     CompareExpr,
+    ExistsExpr,
     Expr,
     LikeExpr,
     FunctionExpr,
@@ -28,10 +29,22 @@ class CheckCodeGenerator:
         function_name = f"trigger_function_{constraint.table_name}_{constraint.constraint_name}"
         trigger_name = f"trigger_{constraint.table_name}_{constraint.constraint_name}"
 
-        procedure_sql = self._build_procedure_sql(constraint, procedure_name)
-        # condition_sql = self._emit_bool_expr(constraint.condition)
-        function_sql = self._build_trigger_function_sql(constraint, procedure_name, function_name)
-        trigger_sql = self._build_trigger_sql(trigger_name, constraint.table_name, function_name)
+        if isinstance(constraint.condition, ExistsExpr):
+            procedure_sql = self._build_global_query_procedure_sql(constraint, procedure_name)
+            function_sql = self._build_noarg_trigger_function_sql(procedure_name, function_name)
+            trigger_sql = self._build_constraint_trigger_sql(
+                trigger_name,
+                constraint.table_name,
+                function_name,
+            )
+        else:
+            procedure_sql = self._build_procedure_sql(constraint, procedure_name)
+            # condition_sql = self._emit_bool_expr(constraint.condition)
+            if len(constraint.referenced_columns) == 0:
+                function_sql = self._build_noarg_before_trigger_function_sql(procedure_name, function_name)
+            else:
+                function_sql = self._build_trigger_function_sql(constraint, procedure_name, function_name)
+            trigger_sql = self._build_trigger_sql(trigger_name, constraint.table_name, function_name)
 
         combined_sql = procedure_sql + "\n\n" + function_sql + "\n\n" + trigger_sql
 
@@ -48,16 +61,42 @@ class CheckCodeGenerator:
     def _build_procedure_sql(self, constraint: TransformedCheckConstraint, procedure_name: str) -> str:
         params_sql = self._build_procedure_params(constraint.referenced_columns)
         condition_sql = self._emit_bool_expr_for_procedure(constraint.condition)
-        escaped_message = constraint.original_check_sql.replace("'", "''")
+        escaped_message = constraint.original_check_sql.replace("'", "''").replace("%", "%%")
+
+        if params_sql.strip():
+            procedure_header = f"""CREATE OR REPLACE PROCEDURE {procedure_name}(
+        {params_sql}
+)"""
+        else:
+            procedure_header = f"CREATE OR REPLACE PROCEDURE {procedure_name}()"
 
         return f"""
-CREATE OR REPLACE PROCEDURE {procedure_name}(
-    {params_sql}
-)
+{procedure_header}
 LANGUAGE plpgsql
 AS $$
 BEGIN
     IF ({condition_sql}) IS FALSE THEN
+        RAISE EXCEPTION USING MESSAGE = 'CHECK constraint violated: {escaped_message}';
+    END IF;
+END;
+$$;
+""".strip()
+
+    def _build_global_query_procedure_sql(self, constraint: TransformedCheckConstraint, procedure_name: str) -> str:
+        if not isinstance(constraint.condition, ExistsExpr):
+            raise TypeError(
+                f"Global raw-query procedure expects ExistsExpr, got {type(constraint.condition).__name__}"
+            )
+
+        violation_condition = self._emit_violation_condition_for_global_query(constraint.condition)
+        escaped_message = constraint.original_check_sql.replace("'", "''")
+
+        return f"""
+CREATE OR REPLACE PROCEDURE {procedure_name}()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF {violation_condition} THEN
         RAISE EXCEPTION 'CHECK constraint violated: {escaped_message}';
     END IF;
 END;
@@ -84,6 +123,36 @@ END;
 $$ LANGUAGE plpgsql;
 """.strip()
 
+    def _build_noarg_before_trigger_function_sql(
+        self,
+        procedure_name: str,
+        function_name: str,
+    ) -> str:
+        return f"""
+CREATE OR REPLACE FUNCTION {function_name}()
+RETURNS TRIGGER AS $$
+BEGIN
+    CALL {procedure_name}();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+""".strip()
+
+    def _build_noarg_trigger_function_sql(
+        self,
+        procedure_name: str,
+        function_name: str,
+    ) -> str:
+        return f"""
+CREATE OR REPLACE FUNCTION {function_name}()
+RETURNS TRIGGER AS $$
+BEGIN
+    CALL {procedure_name}();
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+""".strip()
+
     def _build_trigger_sql(
         self,
         trigger_name: str,
@@ -94,6 +163,21 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS {trigger_name} ON {table_name};
 CREATE TRIGGER {trigger_name}
 BEFORE INSERT OR UPDATE ON {table_name}
+FOR EACH ROW
+EXECUTE FUNCTION {function_name}();
+""".strip()
+
+    def _build_constraint_trigger_sql(
+        self,
+        trigger_name: str,
+        table_name: str,
+        function_name: str,
+    ) -> str:
+        return f"""
+DROP TRIGGER IF EXISTS {trigger_name} ON {table_name};
+CREATE CONSTRAINT TRIGGER {trigger_name}
+AFTER INSERT OR UPDATE OR DELETE ON {table_name}
+DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION {function_name}();
 """.strip()
@@ -205,7 +289,19 @@ EXECUTE FUNCTION {function_name}();
             return str(expr.value)
 
         if expr.literal_type == LiteralType.STRING:
-            escaped = str(expr.value).replace("'", "''")
+            escaped = str(expr.value).replace("'", "''").replace("%", "%%")
             return f"'{escaped}'"
 
         raise ValueError(f"Unsupported literal type: {expr.literal_type}")
+
+    def _emit_violation_condition_for_global_query(self, expr: ExistsExpr) -> str:
+        query = expr.query_sql.strip().rstrip(";")
+
+        if expr.negated:
+            # Original: CHECK NOT EXISTS (Q)
+            # Violation: EXISTS (Q)
+            return f"EXISTS ({query})"
+
+        # Original: CHECK EXISTS (Q)
+        # Violation: NOT EXISTS (Q)
+        return f"NOT EXISTS ({query})"

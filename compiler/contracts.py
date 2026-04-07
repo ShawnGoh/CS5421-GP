@@ -178,6 +178,11 @@ class Token:
     value: str
     pos: int
 
+@dataclass(frozen=True)
+class ExistsExpr(BoolExpr):
+    query_sql: str
+    negated: bool = False
+
 # =========================
 # Top-level transformed IR
 # =========================
@@ -249,6 +254,24 @@ class ValidationRequest:
 @dataclass(frozen=True)
 class ValidationResult:
     success: bool
-    test_case_results: list[TestCaseResult]
+    test_case_results: list[TestCaseResult] | None
+    sql_test_case_results: list[SqlTestCaseResult] | None
     errors: list[str]
     summary: str
+
+
+@dataclass(frozen=True)
+class SqlTestCase:
+    name: str
+    setup_sql: list[str]
+    candidate_sql: list[str]
+    expected_pass: bool
+    rationale: str
+
+@dataclass(frozen=True)
+class SqlTestCaseResult:
+    name: str
+    expected_pass: bool
+    actual_pass: bool
+    rationale: str
+    execution_message: str = ""
