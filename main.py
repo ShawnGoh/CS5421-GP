@@ -123,7 +123,6 @@ def main():
     
     log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)
     for i in transformedCheckConstraints:
-        print(i.condition)
-        print()
+        log(f"Condition: {i.condition}", LogTag.INFO)
 if __name__ == "__main__":
     main()
