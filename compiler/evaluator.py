@@ -42,7 +42,7 @@ class ConstraintSemanticEvaluator:
             return self._or_truth(left, right)
 
         if isinstance(expr, NotExpr):
-            inner = self.evaluate(expr.inner, row)
+            inner = self.evaluate(expr.expr, row)
             return self._not_truth(inner)
 
         if isinstance(expr, CompareExpr):
@@ -137,6 +137,9 @@ class ConstraintSemanticEvaluator:
             return row.values.get(expr.original_name) # read value from row
 
         if isinstance(expr, LiteralExpr):
+            return expr.value
+
+        if isinstance(expr, BoolLiteralExpr):
             return expr.value
 
         if isinstance(expr, BinaryValueExpr):
