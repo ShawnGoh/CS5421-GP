@@ -178,11 +178,11 @@ def main():
                     db_conn=db_conn,
                 )
             else:
-                request = ValidationRequest(
+                result = validator.validate(
                     constraint=constraint,
                     artifacts=artifacts,
+                    db_conn=db_conn,
                 )
-                result = validator.validate(request, db_conn=db_conn)
 
         print_validation_result(constraint, result)
 
