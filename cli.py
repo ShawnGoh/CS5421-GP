@@ -4,11 +4,7 @@ import sys
 from lib.client import db_session, get_connection
 from lib.executor import validate_sql
 from lib.util import clone_schema, drop_schema
-from compiler.codegen import CheckCodeGenerator
-from compiler.validator import CheckValidator
-from compiler.contracts import ExistsExpr, TransformedCheckConstraint, ValidationRequest
-from compiler.evaluator import ConstraintSemanticEvaluator
-from compiler.testgenerator import TestCaseGenerator
+
 
 def setup_test_environment() -> None:
     print("[*] Setting up isolated test environment...")
