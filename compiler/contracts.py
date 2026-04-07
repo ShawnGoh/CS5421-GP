@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 # =========================
 # Enums
@@ -19,6 +19,11 @@ class TruthValue(str, Enum):
     TRUE = "TRUE"
     FALSE = "FALSE"
     UNKNOWN = "UNKNOWN"
+    
+class StatementType(str, Enum):
+    CREATE_TABLE = "CREATE_TABLE"
+    ALTER_TABLE = "ALTER_TABLE"
+    UNSUPPORTED = "UNSUPPORTED"
 
 # =========================
 # Base expression classes
@@ -140,6 +145,38 @@ class CastExpr(Expr):
     expr: Expr
     target_type: str   # "NUMERIC", "TEXT", etc.
     use_pg_style: bool = True   # True: ::, False: CAST()
+    
+# =========================
+# Temp Raw Model
+# =========================
+
+@dataclass(frozen=True)
+class TableRef:
+    schema_name: Optional[str]
+    table_name: str
+    
+@dataclass(frozen=True)
+class ClassifiedStatement:
+    statement_type: StatementType
+    table_ref: TableRef
+    sanitized_sql: str
+    original_sql: str
+    
+@dataclass(frozen=True)
+class RawCheckConstraint:
+    table_name: str
+    constraint_name: str
+    check_expr_sql: str
+    original_check_sql: str
+    source_element_sql: str
+    column_name: Optional[str] = None
+    tokens: Optional[list[Token]] = None
+
+@dataclass(frozen=True) # e.g. Token("IDENT", "price", 1)
+class Token:
+    kind: str
+    value: str
+    pos: int
 
 @dataclass(frozen=True)
 class ExistsExpr(BoolExpr):
