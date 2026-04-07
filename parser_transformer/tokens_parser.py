@@ -1,8 +1,10 @@
 from compiler.contracts import (
     Token, Expr, BoolExpr, OrExpr, AndExpr, CompareExpr,
     ColumnExpr, LiteralExpr, LikeExpr, LiteralType, InExpr, CastExpr, 
-    BetweenExpr, IsNullExpr, BinaryValueExpr, UnaryValueExpr, BoolLiteralExpr, IsBoolExpr
+    BetweenExpr, IsNullExpr, BinaryValueExpr, UnaryValueExpr, BoolLiteralExpr, IsBoolExpr, ExistsExpr
 )
+from parser_transformer.transformer import tokenize
+from parser_transformer.extractor import extract_parenthesized
 
 class CheckExprParser:
     def __init__(self, tokens: list[Token]):
@@ -56,6 +58,82 @@ class CheckExprParser:
             expr = AndExpr(left=expr, right=right)
 
         return expr
+
+    @staticmethod
+    def parse_check_expression(check_expr_sql: str) -> BoolExpr:
+        stripped = check_expr_sql.strip()
+        upper = stripped.upper()
+
+        if upper.startswith("NOT EXISTS"):
+            exists_idx = upper.find("EXISTS")
+            open_idx = exists_idx + len("EXISTS")
+
+            while open_idx < len(stripped) and stripped[open_idx].isspace():
+                open_idx += 1
+
+            if open_idx >= len(stripped) or stripped[open_idx] != "(":
+                raise ValueError("Expected '(' after NOT EXISTS")
+
+            query_sql, _ = extract_parenthesized(stripped, open_idx)
+
+            return ExistsExpr(
+                query_sql=query_sql.strip(),
+                negated=True,
+            )
+
+        if upper.startswith("EXISTS"):
+            open_idx = upper.find("EXISTS") + len("EXISTS")
+
+            while open_idx < len(stripped) and stripped[open_idx].isspace():
+                open_idx += 1
+
+            if open_idx >= len(stripped) or stripped[open_idx] != "(":
+                raise ValueError("Expected '(' after EXISTS")
+
+            query_sql, _ = extract_parenthesized(stripped, open_idx)
+
+            return ExistsExpr(
+                query_sql=query_sql.strip(),
+                negated=False,
+            )
+
+        # fallback to normal parser
+        tokens = tokenize(stripped)
+        parser = CheckExprParser(tokens)
+        return parser.parse()
+    
+    
+    def collect_parenthesized_raw_sql(self) -> str:
+        self.expect("LPAREN")
+
+        depth = 1
+        pieces = []
+
+        while True:
+            tok = self.current()
+
+            if tok.kind == "EOF":
+                raise ValueError("Unterminated EXISTS subquery")
+
+            if tok.kind == "LPAREN":
+                depth += 1
+                pieces.append(tok.value)
+                self.advance()
+                continue
+
+            if tok.kind == "RPAREN":
+                depth -= 1
+                if depth == 0:
+                    self.advance()
+                    break
+                pieces.append(tok.value)
+                self.advance()
+                continue
+
+            pieces.append(tok.value)
+            self.advance()
+
+        return " ".join(pieces).strip()
 
     def parse_predicate(self) -> BoolExpr:
         if self.match("LPAREN"):
@@ -151,6 +229,7 @@ class CheckExprParser:
         
         raise ValueError(f"Expected predicate operator at pos {tok.pos}")
     
+
     def parse_type_name(self) -> str:
         tok = self.current()
         if tok.kind != "IDENT":

@@ -66,3 +66,19 @@ CREATE TABLE items (
         CAST(code AS TEXT) <> ''
     )
 );
+
+CREATE TABLE employees (
+    id INT,
+    position TEXT,
+    salary NUMERIC,
+
+    CONSTRAINT fd_position_salary
+    CHECK (
+        NOT EXISTS (
+            SELECT *
+            FROM employees e1, employees e2
+            WHERE e1.position = e2.position
+              AND e1.salary <> e2.salary
+        )
+    )
+);

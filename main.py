@@ -103,32 +103,23 @@ def main():
             schema = extract_table_schema_from_original_sql(classified_statement.original_sql)
                     
         for raw_check in raw_checks:
-            try:
-                reject_unsupported_features(raw_check.check_expr_sql)
-                tokens = tokenize(raw_check.check_expr_sql)
-            except Exception as e:
-                log(f"Unsupported Feature detected in Check expression: {e}", LogTag.ERROR)
-                break
-            
-            if tokens:
-                parser = CheckExprParser(tokens)
-                condition = parser.parse() 
-                referenced_column_names = collect_referenced_columns(condition)
-                referenced_columns = []
-                for column_name in referenced_column_names:
-                    if schema:
-                        referenced_columns.append((column_name, schema.get(column_name)))    
-                    else:
-                        referenced_columns.append((column_name, "UNKNOWN"))
-                        
-                transformedCheckConstraints.append(
-                    TransformedCheckConstraint(
-                            table_name = raw_check.table_name,
-                            constraint_name = raw_check.constraint_name,
-                            condition = condition,
-                            referenced_columns = referenced_columns,
-                            original_check_sql = raw_check.original_check_sql
-                ))
+            condition = CheckExprParser.parse_check_expression(raw_check.check_expr_sql)
+            referenced_column_names = collect_referenced_columns(condition)
+            referenced_columns = []
+            for column_name in referenced_column_names:
+                if schema:
+                    referenced_columns.append((column_name, schema.get(column_name)))    
+                else:
+                    referenced_columns.append((column_name, "UNKNOWN"))
+                    
+            transformedCheckConstraints.append(
+                TransformedCheckConstraint(
+                        table_name = raw_check.table_name,
+                        constraint_name = raw_check.constraint_name,
+                        condition = condition,
+                        referenced_columns = referenced_columns,
+                        original_check_sql = raw_check.original_check_sql
+            ))
     
     log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)
     for i in transformedCheckConstraints:

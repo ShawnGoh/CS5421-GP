@@ -16,19 +16,20 @@ from compiler.contracts import (
     InExpr,
     CastExpr,
     Token,
-    BoolLiteralExpr
+    BoolLiteralExpr,
+    ExistsExpr
 )
 
 KEYWORDS = {
     "AND", "OR", "NOT", "IS", "NULL", "TRUE", "FALSE",
     "LIKE", "UNKNOWN", "IN", "BETWEEN",
-    "CAST", "AS",
+    "CAST", "AS", "EXISTS",
 }
 
 TWO_CHAR_OPS = {"::", ">=", "<=", "<>", "!="}
 ONE_CHAR_OPS = {"=", ">", "<", "+", "-"}
 
-unsupported = ["SELECT", "EXISTS", "FROM", "WHERE"]
+unsupported = []
 
 def reject_unsupported_features(check_expr_sql: str) -> None:
     upper_sql = check_expr_sql.upper()
@@ -181,6 +182,9 @@ def collect_referenced_columns(expr: Expr) -> list[str]:
                 pass
             
             case BoolLiteralExpr():
+                pass
+            
+            case ExistsExpr():
                 pass    
 
             case CompareExpr(left=left, right=right):
