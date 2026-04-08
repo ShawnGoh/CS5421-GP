@@ -1,21 +1,33 @@
 import argparse
 import sys
-import json
 from pathlib import Path
 
+from psycopg import Cursor
+from psycopg.rows import TupleRow
 
-from util.log import log, LogTag
-from compiler.contracts import StatementType, TableRef, ClassifiedStatement
+from compiler.contracts import (
+    AndExpr,
+    ColumnExpr,
+    CompareExpr,
+    LiteralExpr,
+    OrExpr,
+    StatementType,
+    TransformedCheckConstraint,
+)
+from lib.client import db_session
+from lib.util import clone_schema, drop_schema, validate_sql_file_verbose
 from parser_transformer.classifier import classify_and_extract
+from parser_transformer.extractor import (
+    extract_raw_checks_from_statement,
+    extract_table_schema_from_original_sql,
+)
 from parser_transformer.file_parser import split_sql_statements
-from parser_transformer.extractor import extract_raw_checks_from_statement, extract_table_schema_from_original_sql
-from parser_transformer.transformer import tokenize, reject_unsupported_features, collect_referenced_columns
 from parser_transformer.tokens_parser import CheckExprParser
-from compiler.contracts import Token, BoolExpr, OrExpr, AndExpr, CompareExpr, ColumnExpr, LiteralExpr, LikeExpr, LiteralType, TransformedCheckConstraint
+from parser_transformer.transformer import collect_referenced_columns
+from util.log import LogTag, log
 
 
-
-def validate_sql_file(path_str: str) -> Path:
+def validate_sql_file_path(path_str: str) -> Path:
     path = Path(path_str)
 
     if not path.exists():
@@ -25,11 +37,10 @@ def validate_sql_file(path_str: str) -> Path:
         raise argparse.ArgumentTypeError(f"Path is not a file: {path}")
 
     if path.suffix.lower() != ".sql":
-        raise argparse.ArgumentTypeError(
-            f"Invalid file type (expected .sql): {path}"
-        )
-        
+        raise argparse.ArgumentTypeError(f"Invalid file type (expected .sql): {path}")
+
     return path
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -37,12 +48,11 @@ def parse_args():
     )
 
     parser.add_argument(
-        "file",
-        type=validate_sql_file,
-        help="Path to the .sql file"
+        "file", type=validate_sql_file_path, help="Path to the .sql file"
     )
 
     return parser.parse_args()
+
 
 def format_expr(expr, indent=0):
     pad = "  " * indent
@@ -80,49 +90,77 @@ def format_expr(expr, indent=0):
 
     return f"{pad}{expr}"
 
+
+def setup_test_environment(cur: Cursor[TupleRow]) -> None:
+    log("Setting up isolated test environment...", LogTag.INFO)
+    drop_schema(cursor=cur)
+    clone_schema(cursor=cur)
+    log("Environment ready.", LogTag.INFO)
+
+
 def main():
     args = parse_args()
     sql_path: Path = args.file
 
-    try:
-        sql_text = sql_path.read_text(encoding="utf-8")
-        log("Successfully loaded SQL file", LogTag.INFO)
-    except Exception as e:
-        log(f"Failed to read file: {e}", LogTag.ERROR)
-        sys.exit(1)
-    
-    statements = split_sql_statements(sql_text)
-    
-    transformedCheckConstraints = []
-    
-    for stmt in statements:
-        schema = None
-        classified_statement = classify_and_extract(stmt)
-        raw_checks = extract_raw_checks_from_statement(classified_statement)
-        if classified_statement.statement_type == StatementType.CREATE_TABLE:
-            schema = extract_table_schema_from_original_sql(classified_statement.original_sql)
-                    
-        for raw_check in raw_checks:
-            condition = CheckExprParser.parse_check_expression(raw_check.check_expr_sql)
-            referenced_column_names = collect_referenced_columns(condition)
-            referenced_columns = []
-            for column_name in referenced_column_names:
-                if schema:
-                    referenced_columns.append((column_name, schema.get(column_name)))    
-                else:
-                    referenced_columns.append((column_name, "UNKNOWN"))
-                    
-            transformedCheckConstraints.append(
-                TransformedCheckConstraint(
-                        table_name = raw_check.table_name,
-                        constraint_name = raw_check.constraint_name,
-                        condition = condition,
-                        referenced_columns = referenced_columns,
-                        original_check_sql = raw_check.original_check_sql
-            ))
-    
-    log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)
-    for i in transformedCheckConstraints:
-        log(f"Condition: {i.condition}", LogTag.INFO)
+    with db_session() as db_conn:
+        try:
+            sql_text = sql_path.read_text(encoding="utf-8")
+            log("Successfully loaded SQL file", LogTag.INFO)
+
+            setup_test_environment(cur=db_conn)
+            validate_sql_file_verbose(cursor=db_conn, file_path=sql_path)
+
+            statements = split_sql_statements(sql_text)
+
+            transformedCheckConstraints = []
+            for stmt in statements:
+                schema = None
+                classified_statement = classify_and_extract(stmt)
+                raw_checks = extract_raw_checks_from_statement(classified_statement)
+                if classified_statement.statement_type == StatementType.CREATE_TABLE:
+                    schema = extract_table_schema_from_original_sql(
+                        classified_statement.original_sql
+                    )
+
+                for raw_check in raw_checks:
+                    condition = CheckExprParser.parse_check_expression(
+                        raw_check.check_expr_sql
+                    )
+                    referenced_column_names = collect_referenced_columns(condition)
+                    referenced_columns = []
+                    for column_name in referenced_column_names:
+                        if schema:
+                            referenced_columns.append(
+                                (column_name, schema.get(column_name))
+                            )
+                        else:
+                            referenced_columns.append((column_name, "UNKNOWN"))
+
+                    transformedCheckConstraints.append(
+                        TransformedCheckConstraint(
+                            table_name=raw_check.table_name,
+                            constraint_name=raw_check.constraint_name,
+                            condition=condition,
+                            referenced_columns=referenced_columns,
+                            original_check_sql=raw_check.original_check_sql,
+                        )
+                    )
+
+            log(
+                f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}",
+                LogTag.INFO,
+            )
+            for i in transformedCheckConstraints:
+                log(f"Condition: {i.condition}", LogTag.INFO)
+
+        except Exception as e:
+            log(f"Failed to run compiler: {e}", LogTag.ERROR)
+            sys.exit(1)
+        finally:
+            # Ensure connection is closed even if sys.exit is called
+            if db_conn:
+                db_conn.close()
+
+
 if __name__ == "__main__":
     main()
