@@ -5,6 +5,8 @@ import psycopg
 
 from conf.config import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
 from util.log import LogTag, log
+from util.log import log
+from conf.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT
 
 
 def get_connection() -> psycopg.Connection:
@@ -22,8 +24,13 @@ def get_connection() -> psycopg.Connection:
         )  # set as false for validator deferred checks
         log(f"[+] Connected to psycopg3: {DB_NAME}", LogTag.INFO)
         return conn
+    # except Exception as e:
+    #     log(f"[-] Connection failed: {e}", LogTag.ERROR)
+    #     conn = psycopg.connect(conn_str, autocommit=False) # set as false for validator deferred checks
+    #     log(f"[+] Connected to psycopg3: {DB_NAME}")
+    #     return conn
     except Exception as e:
-        log(f"[-] Connection failed: {e}", LogTag.ERROR)
+        log(f"[-] Connection failed: {e}")
         raise
 
 

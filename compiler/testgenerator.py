@@ -192,6 +192,93 @@ class TestCaseGenerator:
                 ),
             ]
 
+        if name == "chk_username_pattern_single_char":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"username": "abc"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="'abc' matches 'a_c' (_ matches exactly one char)",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "axc"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="'axc' matches 'a_c'",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "ac"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="missing middle char → does not match",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "abbc"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="two chars between a and c → does not match '_'",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="LIKE with NULL yields UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_username_ilike":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"username": "admin123"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="matches prefix",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "ADMIN123"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="ILIKE is case-insensitive",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "AdMiNxyz"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="mixed case still matches",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "useradmin"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="does not start with admin",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="ILIKE with NULL yields UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_username_ilike_single_char":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"username": "abc123"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="'abc123' matches 'a_c%'",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "aXcXYZ"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="case-insensitive + single char match",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "ac123"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="missing middle char",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": "abdc"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="two chars between a and c",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"username": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="ILIKE with NULL yields UNKNOWN",
+                ),
+            ]
+
         if name == "chk_true_literal":
             return [
                 TestRowExpectation(
@@ -277,6 +364,192 @@ class TestCaseGenerator:
                 ),
             ]
 
+        if name == "chk_not_banned":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"status": "ACTIVE"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="status = 'BANNED' is false, so NOT false is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"status": "BANNED"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="status = 'BANNED' is true, so NOT true is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"status": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="NULL comparison yields UNKNOWN, and NOT UNKNOWN remains UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_negative_test_val_allowed":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"test_val": 5}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="-5 <= 0 is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"test_val": -3}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="3 <= 0 is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"test_val": 0}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="-0 <= 0 is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"test_val": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="unary minus on NULL yields NULL, comparison is UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_name_length":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"name": "Amy"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="length('Amy') = 3, so >= 3 is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"name": "Al"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="length('Al') = 2, so >= 3 is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"name": ""}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="length('') = 0, so >= 3 is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"name": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="function on NULL yields NULL, comparison is UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_price_not_between":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"price": 5}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="5 is outside 10..100, so NOT BETWEEN is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"price": 150}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="150 is outside 10..100, so NOT BETWEEN is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"price": 10}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="10 is inside BETWEEN boundary, so NOT BETWEEN is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"price": 50}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="50 is inside range, so NOT BETWEEN is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"price": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="BETWEEN with NULL is UNKNOWN, so NOT BETWEEN is also UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_status_not_in":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"status": "ACTIVE"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="ACTIVE is not in forbidden set",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"status": "CANCELLED"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="CANCELLED is in forbidden set, so NOT IN is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"status": "FAILED"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="FAILED is in forbidden set, so NOT IN is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"status": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="NULL NOT IN (...) is UNKNOWN under SQL three-valued logic",
+                ),
+            ]
+
+        if name == "chk_email_not_temp":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"email": "user@gmail.com"}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="does not match tempmail pattern, so NOT LIKE is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"email": "x@tempmail.com"}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="matches tempmail pattern, so NOT LIKE is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"email": None}),
+                    expected_truth=TruthValue.UNKNOWN,
+                    rationale="LIKE with NULL is UNKNOWN, so NOT LIKE is UNKNOWN",
+                ),
+            ]
+
+        if name == "chk_is_active_is_not_true":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"is_active": True}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="TRUE IS NOT TRUE is FALSE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"is_active": False}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="FALSE IS NOT TRUE is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"is_active": None}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="NULL IS NOT TRUE is TRUE",
+                ),
+            ]
+
+        if name == "chk_discount_is_null":
+            return [
+                TestRowExpectation(
+                    row=TestRow({"discount": None}),
+                    expected_truth=TruthValue.TRUE,
+                    rationale="discount IS NULL is TRUE",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"discount": 0}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="non-null value makes IS NULL false",
+                ),
+                TestRowExpectation(
+                    row=TestRow({"discount": 5}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="non-null value makes IS NULL false",
+                ),
+            ]
+
+        if name == "chk_false_literal":
+            return [
+                TestRowExpectation(
+                    row=TestRow({}),
+                    expected_truth=TruthValue.FALSE,
+                    rationale="FALSE always fails",
+                ),
+            ]
+
         return []
 
     def generate_create_table_sql(self, constraint):
@@ -289,6 +562,15 @@ CREATE TABLE products (
     price NUMERIC,
     discounted_price NUMERIC,
     discount NUMERIC,
+    status TEXT,
+    test_val NUMERIC
+);
+""".strip()
+
+        if constraint.table_name == "orders":
+            return """
+DROP TABLE IF EXISTS orders CASCADE;
+CREATE TABLE orders (
     status TEXT
 );
 """.strip()
@@ -299,7 +581,10 @@ DROP TABLE IF EXISTS users CASCADE;
 
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
-    email TEXT
+    name TEXT,
+    email TEXT,
+    username TEXT,
+    status TEXT
 );
 """.strip()
 
@@ -615,6 +900,51 @@ CREATE TABLE employees (
 
         constraints.append(
             TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_username_pattern_single_char",
+                condition=LikeExpr(
+                    value=ColumnExpr("username", "NEW.username"),
+                    pattern=LiteralExpr("a_c", LiteralType.STRING),
+                    negated=False,
+                    case_insensitive=False,
+                ),
+                referenced_columns=[("username", "TEXT")],
+                original_check_sql="CHECK (username LIKE 'a_c')",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_username_ilike",
+                condition=LikeExpr(
+                    value=ColumnExpr("username", "NEW.username"),
+                    pattern=LiteralExpr("admin%", LiteralType.STRING),
+                    negated=False,
+                    case_insensitive=True,
+                ),
+                referenced_columns=[("username", "TEXT")],
+                original_check_sql="CHECK (username ILIKE 'admin%')",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_username_ilike_single_char",
+                condition=LikeExpr(
+                    value=ColumnExpr("username", "NEW.username"),
+                    pattern=LiteralExpr("a_c%", LiteralType.STRING),
+                    negated=False,
+                    case_insensitive=True,
+                ),
+                referenced_columns=[("username", "TEXT")],
+                original_check_sql="CHECK (username ILIKE 'a_c%')",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
                 table_name="flags",
                 constraint_name="chk_true_literal",
                 condition=BoolLiteralExpr(True),
@@ -630,7 +960,7 @@ CREATE TABLE employees (
                 condition=CompareExpr(
                     left=ColumnExpr("is_active", "NEW.is_active"),
                     operator="=",
-                    right=LiteralExpr(True, LiteralType.BOOLEAN),
+                    right=BoolLiteralExpr(True),
                 ),
                 referenced_columns=[("is_active", "BOOLEAN")],
                 original_check_sql="CHECK (is_active = TRUE)",
@@ -642,11 +972,7 @@ CREATE TABLE employees (
                 table_name="accounts",
                 constraint_name="chk_is_active_is_true",
                 condition=IsBoolExpr(
-                    expr=CompareExpr(
-                        left=ColumnExpr("is_active", "NEW.is_active"),
-                        operator="=",
-                        right=LiteralExpr(True, LiteralType.BOOLEAN),
-                    ),
+                    expr=ColumnExpr("is_active", "NEW.is_active"),
                     check_for="TRUE",
                     negated=False,
                 ),
@@ -688,6 +1014,155 @@ CREATE TABLE employees (
                 ),
                 referenced_columns=[("code", "NUMERIC")],
                 original_check_sql="CHECK (CAST(code AS TEXT) <> '')",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_not_banned",
+                condition=NotExpr(
+                    expr=CompareExpr(
+                        left=ColumnExpr("status", "NEW.status"),
+                        operator="=",
+                        right=LiteralExpr("BANNED", LiteralType.STRING),
+                    )
+                ),
+                referenced_columns=[("status", "TEXT")],
+                original_check_sql="CHECK (NOT (status = 'BANNED'))",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="products",
+                constraint_name="chk_negative_test_val_allowed",
+                condition=CompareExpr(
+                    left=UnaryValueExpr(
+                        operator="-",
+                        expr=ColumnExpr("test_val", "NEW.test_val"),
+                    ),
+                    operator="<=",
+                    right=LiteralExpr(0, LiteralType.NUMBER),
+                ),
+                referenced_columns=[("test_val", "NUMERIC")],
+                original_check_sql="CHECK (-test_val <= 0)",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_name_length",
+                condition=CompareExpr(
+                    left=FunctionExpr(
+                        function_name="length",
+                        args=[ColumnExpr("name", "NEW.name")],
+                    ),
+                    operator=">=",
+                    right=LiteralExpr(3, LiteralType.NUMBER),
+                ),
+                referenced_columns=[("name", "TEXT")],
+                original_check_sql="CHECK (length(name) >= 3)",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="products",
+                constraint_name="chk_price_not_between",
+                condition=BetweenExpr(
+                    value=ColumnExpr("price", "NEW.price"),
+                    lower=LiteralExpr(10, LiteralType.NUMBER),
+                    upper=LiteralExpr(100, LiteralType.NUMBER),
+                    negated=True,
+                ),
+                referenced_columns=[("price", "NUMERIC")],
+                original_check_sql="CHECK (price NOT BETWEEN 10 AND 100)",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="orders",
+                constraint_name="chk_status_not_in",
+                condition=InExpr(
+                    value=ColumnExpr("status", "NEW.status"),
+                    options=[
+                        LiteralExpr("CANCELLED", LiteralType.STRING),
+                        LiteralExpr("FAILED", LiteralType.STRING),
+                    ],
+                    negated=True,
+                ),
+                referenced_columns=[("status", "TEXT")],
+                original_check_sql="CHECK (status NOT IN ('CANCELLED', 'FAILED'))",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_email_not_temp",
+                condition=LikeExpr(
+                    value=ColumnExpr("email", "NEW.email"),
+                    pattern=LiteralExpr("%@tempmail.com", LiteralType.STRING),
+                    negated=True,
+                    case_insensitive=False,
+                ),
+                referenced_columns=[("email", "TEXT")],
+                original_check_sql="CHECK (email NOT LIKE '%@tempmail.com')",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="users",
+                constraint_name="chk_email_ilike",
+                condition=LikeExpr(
+                    value=ColumnExpr("email", "NEW.email"),
+                    pattern=LiteralExpr("%@gmail.com", LiteralType.STRING),
+                    negated=False,
+                    case_insensitive=True,
+                ),
+                referenced_columns=[("email", "TEXT")],
+                original_check_sql="CHECK (email ILIKE '%@gmail.com')",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="accounts",
+                constraint_name="chk_is_active_is_not_true",
+                condition=IsBoolExpr(
+                    expr=ColumnExpr("is_active", "NEW.is_active"),
+                    check_for="TRUE",
+                    negated=True,
+                ),
+                referenced_columns=[("is_active", "BOOLEAN")],
+                original_check_sql="CHECK (is_active IS NOT TRUE)",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="products",
+                constraint_name="chk_discount_is_null",
+                condition=IsNullExpr(
+                    expr=ColumnExpr("discount", "NEW.discount"),
+                    negated=False,
+                ),
+                referenced_columns=[("discount", "NUMERIC")],
+                original_check_sql="CHECK (discount IS NULL)",
+            )
+        )
+
+        constraints.append(
+            TransformedCheckConstraint(
+                table_name="flags",
+                constraint_name="chk_false_literal",
+                condition=BoolLiteralExpr(False),
+                referenced_columns=[],
+                original_check_sql="CHECK (FALSE)",
             )
         )
 

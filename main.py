@@ -2,30 +2,53 @@ import argparse
 import sys
 from pathlib import Path
 
-from psycopg import Cursor
-from psycopg.rows import TupleRow
 
-from compiler.contracts import (
-    AndExpr,
-    ColumnExpr,
-    CompareExpr,
-    LiteralExpr,
-    OrExpr,
-    StatementType,
-    TransformedCheckConstraint,
-)
+from util.log import log, LogTag, banner, log_testcase, underline
+from compiler.contracts import StatementType
 from lib.client import db_session
-from lib.util import clone_schema, drop_schema, validate_sql_file_verbose
+from compiler.codegen import CheckCodeGenerator
+from compiler.validator import CheckValidator
+from compiler.evaluator import ConstraintSemanticEvaluator
+from compiler.testgenerator import TestCaseGenerator
 from parser_transformer.classifier import classify_and_extract
 from parser_transformer.extractor import (
     extract_raw_checks_from_statement,
     extract_table_schema_from_original_sql,
 )
 from parser_transformer.file_parser import split_sql_statements
+from parser_transformer.extractor import extract_raw_checks_from_statement, extract_table_schema_from_original_sql
+from parser_transformer.transformer import collect_referenced_columns
 from parser_transformer.tokens_parser import CheckExprParser
 from parser_transformer.transformer import collect_referenced_columns
 from util.log import LogTag, log
 
+from compiler.contracts import OrExpr, AndExpr, CompareExpr, ColumnExpr, ExistsExpr, LiteralExpr, TransformedCheckConstraint
+
+def print_validation_result(constraint, result):
+    log(result.summary)
+
+    if result.errors:
+        log("errors:")
+        for err in result.errors:
+            log(f"  - {err}")
+
+    for case in result.test_case_results:
+        log(
+            f"row={case.row.values}, "
+            f"expected_truth={case.expected_truth}, "
+            f"actual_truth={case.actual_truth}, "
+            f"expected_pass={case.expected_pass}, "
+            f"actual_pass={case.actual_pass}, "
+            f"reason={case.rationale}"
+        )
+
+    for case in result.sql_test_case_results:
+        log(
+            f"name={case.name}, "
+            f"expected_pass={case.expected_pass}, "
+            f"actual_pass={case.actual_pass}, "
+            f"reason={case.rationale}, "
+        )
 
 def validate_sql_file_path(path_str: str) -> Path:
     path = Path(path_str)
@@ -99,6 +122,7 @@ def setup_test_environment(cur: Cursor[TupleRow]) -> None:
 
 
 def main():
+    banner("Program started. Loading SQL file")
     args = parse_args()
     sql_path: Path = args.file
 
@@ -162,5 +186,81 @@ def main():
                 db_conn.close()
 
 
+    try:
+        sql_text = sql_path.read_text(encoding="utf-8")
+        log("Successfully loaded SQL file", LogTag.INFO)
+    except Exception as e:
+        log(f"Failed to read file: {e}", LogTag.ERROR)
+        sys.exit(1)
+    
+    statements = split_sql_statements(sql_text)
+    
+    transformedCheckConstraints = []
+    banner("Parser Running") 
+    for stmt in statements:
+        schema = None
+        classified_statement = classify_and_extract(stmt)
+        raw_checks = extract_raw_checks_from_statement(classified_statement)
+        if classified_statement.statement_type == StatementType.CREATE_TABLE:
+            schema = extract_table_schema_from_original_sql(classified_statement.original_sql)
+                    
+        for raw_check in raw_checks:
+            condition = CheckExprParser.parse_check_expression(raw_check.check_expr_sql)
+            referenced_column_names = collect_referenced_columns(condition)
+            referenced_columns = []
+            for column_name in referenced_column_names:
+                if schema:
+                    referenced_columns.append((column_name, schema.get(column_name)))    
+                else:
+                    referenced_columns.append((column_name, "UNKNOWN"))
+                    
+            transformedCheckConstraints.append(
+                TransformedCheckConstraint(
+                        table_name = raw_check.table_name,
+                        constraint_name = raw_check.constraint_name,
+                        condition = condition,
+                        referenced_columns = referenced_columns,
+                        original_check_sql = raw_check.original_check_sql
+            ))
+            
+            log(f"Condition: {condition}", LogTag.INFO)
+    
+    log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)      
+    banner("CodeGen and Validation Running") 
+    # log(transformedCheckConstraints)
+
+    generator = CheckCodeGenerator()
+    evaluator = ConstraintSemanticEvaluator()
+    test_generator = TestCaseGenerator()
+    validator = CheckValidator(evaluator, test_generator)
+
+    for i in range(len(transformedCheckConstraints)):
+        constraint = transformedCheckConstraints[i]
+        artifacts = generator.generate(constraint)
+                
+        log_testcase(constraint.constraint_name, constraint.original_check_sql, artifacts.combined_sql)
+
+        with db_session() as db_conn:
+            if isinstance(constraint.condition, ExistsExpr):
+                result = validator.validate_exists_constraint(
+                    constraint=constraint,
+                    artifacts=artifacts,
+                    db_conn=db_conn,
+                )
+            else:
+                result = validator.validate(
+                    constraint=constraint,
+                    artifacts=artifacts,
+                    db_conn=db_conn,
+                )
+
+        print_validation_result(constraint, result)
+        
+        if i != len(transformedCheckConstraints)-1:
+            underline()
+    
+    banner("Performance Testing Running") 
+    
+    banner("Program Completed. Exiiting.") 
 if __name__ == "__main__":
     main()
