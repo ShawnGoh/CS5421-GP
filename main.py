@@ -1,11 +1,10 @@
 import argparse
 import sys
-import json
 from pathlib import Path
 
 
-from util.log import log, LogTag
-from compiler.contracts import StatementType, TableRef, ClassifiedStatement
+from util.log import log, LogTag, banner, log_testcase, underline
+from compiler.contracts import StatementType
 from lib.client import db_session
 from compiler.codegen import CheckCodeGenerator
 from compiler.validator import CheckValidator
@@ -14,9 +13,9 @@ from compiler.testgenerator import TestCaseGenerator
 from parser_transformer.classifier import classify_and_extract
 from parser_transformer.file_parser import split_sql_statements
 from parser_transformer.extractor import extract_raw_checks_from_statement, extract_table_schema_from_original_sql
-from parser_transformer.transformer import tokenize, reject_unsupported_features, collect_referenced_columns
+from parser_transformer.transformer import collect_referenced_columns
 from parser_transformer.tokens_parser import CheckExprParser
-from compiler.contracts import Token, BoolExpr, OrExpr, AndExpr, CompareExpr, ColumnExpr, ExistsExpr, LiteralExpr, LikeExpr, LiteralType, TransformedCheckConstraint
+from compiler.contracts import OrExpr, AndExpr, CompareExpr, ColumnExpr, ExistsExpr, LiteralExpr, TransformedCheckConstraint
 
 def print_validation_result(constraint, result):
     log(result.summary)
@@ -111,6 +110,7 @@ def format_expr(expr, indent=0):
     return f"{pad}{expr}"
 
 def main():
+    banner("Program started. Loading SQL file")
     args = parse_args()
     sql_path: Path = args.file
 
@@ -124,7 +124,7 @@ def main():
     statements = split_sql_statements(sql_text)
     
     transformedCheckConstraints = []
-    
+    banner("Parser Running") 
     for stmt in statements:
         schema = None
         classified_statement = classify_and_extract(stmt)
@@ -150,24 +150,23 @@ def main():
                         referenced_columns = referenced_columns,
                         original_check_sql = raw_check.original_check_sql
             ))
+            
+            log(f"Condition: {condition}", LogTag.INFO)
     
-    log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)
-    for i in transformedCheckConstraints:
-        log(f"Condition: {i.condition}", LogTag.INFO)
-
-    log(transformedCheckConstraints)
+    log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)      
+    banner("CodeGen and Validation Running") 
+    # log(transformedCheckConstraints)
 
     generator = CheckCodeGenerator()
     evaluator = ConstraintSemanticEvaluator()
     test_generator = TestCaseGenerator()
     validator = CheckValidator(evaluator, test_generator)
 
-    for constraint in transformedCheckConstraints:
+    for i in range(len(transformedCheckConstraints)):
+        constraint = transformedCheckConstraints[i]
         artifacts = generator.generate(constraint)
-
-        log(f"\n===== {constraint.constraint_name} {constraint.original_check_sql} =====")
-        log("\n=== COMBINED SQL ===")
-        log(artifacts.combined_sql)
+                
+        log_testcase(constraint.constraint_name, constraint.original_check_sql, artifacts.combined_sql)
 
         with db_session() as db_conn:
             if isinstance(constraint.condition, ExistsExpr):
@@ -184,7 +183,12 @@ def main():
                 )
 
         print_validation_result(constraint, result)
-
+        
+        if i != len(transformedCheckConstraints)-1:
+            underline()
     
+    banner("Performance Testing Running") 
+    
+    banner("Program Completed. Exiiting.") 
 if __name__ == "__main__":
     main()
