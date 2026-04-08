@@ -22,15 +22,15 @@ def get_connection() -> psycopg.Connection:
         conn = psycopg.connect(
             conn_str, autocommit=False
         )  # set as false for validator deferred checks
-        log(f"[+] Connected to psycopg3: {DB_NAME}", LogTag.INFO)
+        log(f"Connected to psycopg3: {DB_NAME}", LogTag.INFO)
         return conn
     # except Exception as e:
-    #     log(f"[-] Connection failed: {e}", LogTag.ERROR)
+    #     log(f"Connection failed: {e}", LogTag.ERROR)
     #     conn = psycopg.connect(conn_str, autocommit=False) # set as false for validator deferred checks
-    #     log(f"[+] Connected to psycopg3: {DB_NAME}")
+    #     log(f"Connected to psycopg3: {DB_NAME}")
     #     return conn
     except Exception as e:
-        log(f"[-] Connection failed: {e}")
+        log(f"Connection failed: {e}")
         raise
 
 

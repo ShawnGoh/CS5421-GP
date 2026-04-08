@@ -36,7 +36,7 @@ def clone_schema(
 
     # 3. Clone each table structure
     for table in tables:
-        log(f"    [+] Cloning table structure: {table}", LogTag.INFO)
+        log(f"Cloning table structure: {table}", LogTag.INFO)
         # INCLUDING ALL copies indexes, defaults, and native CHECK constraints
         cursor.execute(
             sql.SQL("CREATE TABLE {}.{} (LIKE {}.{} INCLUDING ALL)").format(
@@ -47,7 +47,7 @@ def clone_schema(
             )
         )
 
-    log(f"[+] Successfully cloned {len(tables)} tables to {dest}.", LogTag.INFO)
+    log(f"Successfully cloned {len(tables)} tables to {dest}.", LogTag.INFO)
 
 
 def drop_schema(
@@ -78,6 +78,14 @@ def drop_schema(
     except Exception as e:
         log(f"Failed to drop schema '{schema_name}': {e}", LogTag.ERROR)
         raise e
+
+
+def set_to_test_schema(cursor: psycopg.Cursor) -> None:
+    cursor.execute(sql.SQL(f"SET search_path TO {TEST_SCHEMA}"))  # type: ignore
+
+
+def set_to_source_schema(cursor: psycopg.Cursor) -> None:
+    cursor.execute(sql.SQL(f"SET search_path TO {SOURCE_SCHEMA}"))  # type: ignore
 
 
 def validate_sql_file(cursor: psycopg.Cursor[Any], file_path: Path) -> bool:
@@ -149,6 +157,7 @@ def validate_sql_file_verbose(cursor: psycopg.Cursor[Any], file_path: Path) -> b
 
         # 3. Iterate through statements
         for i, stmt in enumerate(statements, 1):
+            log(f"Validating sql stmt: {stmt}", LogTag.INFO)
             try:
                 # conn.transaction() creates a checkpoint if already in a transaction,
                 # continue the loop even if one statement fails.
