@@ -1,7 +1,7 @@
 from lib.client import db_session
 from compiler.codegen import CheckCodeGenerator
 from compiler.validator import CheckValidator
-from compiler.contracts import ExistsExpr, ValidationRequest
+from compiler.contracts import ExistsExpr
 from compiler.evaluator import ConstraintSemanticEvaluator
 from compiler.testgenerator import TestCaseGenerator
 from util.log import log, LogTag

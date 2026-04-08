@@ -9,7 +9,6 @@ from compiler.contracts import StatementType, TableRef, ClassifiedStatement
 from lib.client import db_session
 from compiler.codegen import CheckCodeGenerator
 from compiler.validator import CheckValidator
-from compiler.contracts import ExistsExpr, ValidationRequest
 from compiler.evaluator import ConstraintSemanticEvaluator
 from compiler.testgenerator import TestCaseGenerator
 from parser_transformer.classifier import classify_and_extract
@@ -17,7 +16,7 @@ from parser_transformer.file_parser import split_sql_statements
 from parser_transformer.extractor import extract_raw_checks_from_statement, extract_table_schema_from_original_sql
 from parser_transformer.transformer import tokenize, reject_unsupported_features, collect_referenced_columns
 from parser_transformer.tokens_parser import CheckExprParser
-from compiler.contracts import Token, BoolExpr, OrExpr, AndExpr, CompareExpr, ColumnExpr, LiteralExpr, LikeExpr, LiteralType, TransformedCheckConstraint
+from compiler.contracts import Token, BoolExpr, OrExpr, AndExpr, CompareExpr, ColumnExpr, ExistsExpr, LiteralExpr, LikeExpr, LiteralType, TransformedCheckConstraint
 
 def print_validation_result(constraint, result):
     log(result.summary)
