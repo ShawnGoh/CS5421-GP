@@ -1,8 +1,10 @@
-import psycopg
-from typing import Generator
 from contextlib import contextmanager
+from typing import Generator
 
-from conf.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD, DB_PORT
+import psycopg
+
+from conf.config import DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER
+from util.log import LogTag, log
 
 
 def get_connection() -> psycopg.Connection:
@@ -15,11 +17,13 @@ def get_connection() -> psycopg.Connection:
     )
 
     try:
-        conn = psycopg.connect(conn_str, autocommit=False) # set as false for validator deferred checks
-        print(f"[+] Connected to psycopg3: {DB_NAME}")
+        conn = psycopg.connect(
+            conn_str, autocommit=False
+        )  # set as false for validator deferred checks
+        log(f"[+] Connected to psycopg3: {DB_NAME}", LogTag.INFO)
         return conn
     except Exception as e:
-        print(f"[-] Connection failed: {e}")
+        log(f"[-] Connection failed: {e}", LogTag.ERROR)
         raise
 
 
@@ -33,4 +37,4 @@ def db_session() -> Generator[psycopg.Cursor, None, None]:
     finally:
         cur.close()
         conn.close()
-        print("[*] Database session closed.")
+        log("Database session closed.", LogTag.INFO)
