@@ -11,14 +11,14 @@ class CheckValidator:
         self.evaluator = evaluator
         self.test_case_generator = test_case_generator
 
-    def validate(self, request, db_conn=None) -> ValidationResult:
+    def validate(self, constraint, artifacts, db_conn=None) -> ValidationResult:
         errors = []
         results = []
 
-        test_cases = self.test_case_generator.generate(request.constraint)
+        test_cases = self.test_case_generator.generate(constraint)
 
         for case in test_cases:
-            actual_truth = self.evaluator.evaluate(request.constraint.condition, case.row)
+            actual_truth = self.evaluator.evaluate(constraint.condition, case.row)
 
             expected_truth = case.expected_truth
             expected_pass = self._passes_check(expected_truth)
@@ -40,15 +40,15 @@ class CheckValidator:
 
         if db_conn is not None:
             try:
-                create_table_sql = self.test_case_generator.generate_create_table_sql(request.constraint)
+                create_table_sql = self.test_case_generator.generate_create_table_sql(constraint)
                 sql_test_cases = self.test_case_generator.generate_sql_test_cases_from_row_expectations(
-                    request.constraint,
+                    constraint,
                     test_cases,
                 )
 
                 sql_test_case_results = self._run_sql_test_cases(
-                    constraint=request.constraint,
-                    artifacts=request.artifacts,
+                    constraint=constraint,
+                    artifacts=artifacts,
                     create_table_sql=create_table_sql,
                     sql_test_cases=sql_test_cases,
                     db_conn=db_conn,

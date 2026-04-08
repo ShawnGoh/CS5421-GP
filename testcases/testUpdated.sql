@@ -23,6 +23,16 @@ CREATE TABLE products (
         price - discount >= 0
     ),
 
+    CONSTRAINT chk_negative_test_val_allowed
+    CHECK (
+        -test_val <= 0
+    ),
+
+    CONSTRAINT chk_price_not_between
+    CHECK (
+        price NOT BETWEEN 10 AND 100
+    ),
+
     CONSTRAINT chk_discount_is_null
     CHECK (
         discount IS NULL
@@ -40,16 +50,42 @@ CREATE TABLE users (
         email LIKE '%@gmail.com'
     ),
 
+    CONSTRAINT chk_email_not_temp
+    CHECK (
+        email NOT LIKE '%@tempmail.com'
+    ),
+
     CONSTRAINT chk_username_pattern_single_char
     CHECK (
         username LIKE 'a_c'
     ),
+
+    CONSTRAINT chk_username_ilike
+    CHECK (
+        username ILIKE 'admin%'
+    ),
+
+    CONSTRAINT chk_username_ilike_single_char
+    CHECK (
+        username ILIKE 'a_c%'
+    ),
+
+    CONSTRAINT chk_name_length
+    CHECK (
+        length(name) >= 3
+    ),
+
+    CONSTRAINT chk_not_banned
+    CHECK (
+        NOT (status = 'BANNED')
+    )
 );
 
 CREATE TABLE flags (
     dummy BOOLEAN,
+
     CONSTRAINT chk_true_literal
-    CHECK (TRUE)
+    CHECK (TRUE),
 
     CONSTRAINT chk_false_literal
     CHECK (FALSE)
@@ -66,11 +102,17 @@ CREATE TABLE accounts (
     CONSTRAINT chk_is_active_is_true
     CHECK (
         is_active IS TRUE
+    ),
+
+    CONSTRAINT chk_is_active_is_not_true
+    CHECK (
+        is_active IS NOT TRUE
     )
 );
 
 CREATE TABLE payments (
     amount TEXT,
+
     CONSTRAINT chk_amount_cast_numeric
     CHECK (
         amount::numeric > 0
@@ -79,9 +121,19 @@ CREATE TABLE payments (
 
 CREATE TABLE items (
     code NUMERIC,
+
     CONSTRAINT chk_code_cast_text
     CHECK (
         CAST(code AS TEXT) <> ''
+    )
+);
+
+CREATE TABLE orders (
+    status TEXT,
+
+    CONSTRAINT chk_status_not_in
+    CHECK (
+        status NOT IN ('CANCELLED', 'FAILED')
     )
 );
 

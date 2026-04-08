@@ -246,12 +246,6 @@ class TestCaseResult:
 
 
 @dataclass(frozen=True)
-class ValidationRequest:
-    constraint: TransformedCheckConstraint
-    artifacts: GeneratedCheckArtifacts
-
-
-@dataclass(frozen=True)
 class ValidationResult:
     success: bool
     test_case_results: list[TestCaseResult] | None
