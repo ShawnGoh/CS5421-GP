@@ -16,6 +16,8 @@ from compiler.contracts import (
     StatementType,
     TransformedCheckConstraint,
 )
+from compiler.benchmark import run_benchmarks
+from compiler.validator import CheckValidator
 from compiler.evaluator import ConstraintSemanticEvaluator
 from compiler.testgenerator import TestCaseGenerator
 from compiler.validator import CheckValidator
@@ -227,7 +229,12 @@ def main():
 
                 if i != len(transformedCheckConstraints) - 1:
                     underline()
-
+                run_benchmarks(
+                    row_level_row_counts=[1_000, 10_000, 100_000, 1_000_000],
+                    table_level_row_counts=[100, 200, 500, 1_000],
+                    reps=3,
+                    csv_output_path="benchmark_results.csv",
+                )
             banner("Performance Testing Running")
 
             banner("Program Completed. Exiting.")
@@ -239,7 +246,5 @@ def main():
             # Ensure connection is closed even if sys.exit is called
             if db_conn:
                 db_conn.close()
-
-
 if __name__ == "__main__":
     main()
