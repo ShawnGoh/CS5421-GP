@@ -229,13 +229,14 @@ def main():
 
                 if i != len(transformedCheckConstraints) - 1:
                     underline()
-                run_benchmarks(
-                    row_level_row_counts=[1_000, 10_000, 100_000, 1_000_000],
-                    table_level_row_counts=[100, 200, 500, 1_000],
-                    reps=3,
-                    csv_output_path="benchmark_results.csv",
-                )
+            
             banner("Performance Testing Running")
+            run_benchmarks(
+                row_level_row_counts=[1_000, 10_000, 100_000, 1_000_000],
+                table_level_row_counts=[100, 200, 500, 1_000],
+                reps=3,
+                csv_output_path="benchmark_results.csv",
+            )
 
             banner("Program Completed. Exiting.")
 
