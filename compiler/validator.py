@@ -1,9 +1,10 @@
 from compiler.contracts import (
-    TestCaseResult,
-    ValidationResult,
-    TruthValue,
     SqlTestCaseResult,
+    TestCaseResult,
+    TruthValue,
+    ValidationResult,
 )
+from util.log import LogTag, log
 
 
 class CheckValidator:
@@ -40,7 +41,9 @@ class CheckValidator:
 
         if db_conn is not None:
             try:
-                create_table_sql = self.test_case_generator.generate_create_table_sql(constraint)
+                create_table_sql = self.test_case_generator.generate_create_table_sql(
+                    constraint
+                )
                 sql_test_cases = self.test_case_generator.generate_sql_test_cases_from_row_expectations(
                     constraint,
                     test_cases,
@@ -78,8 +81,12 @@ class CheckValidator:
     def _passes_check(self, truth_value: TruthValue) -> bool:
         return truth_value != TruthValue.FALSE
 
-    def validate_exists_constraint(self, constraint, artifacts, db_conn) -> ValidationResult:
-        create_table_sql = self.test_case_generator.generate_create_table_sql(constraint)
+    def validate_exists_constraint(
+        self, constraint, artifacts, db_conn
+    ) -> ValidationResult:
+        create_table_sql = self.test_case_generator.generate_create_table_sql(
+            constraint
+        )
         test_cases = self.test_case_generator.generate_exists_test_cases(constraint)
 
         errors = []
@@ -102,7 +109,9 @@ class CheckValidator:
             )
 
         success = all(r.expected_pass == r.actual_pass for r in sql_test_case_results)
-        summary = f"Validated {len(sql_test_case_results)} SQL test cases. Success={success}."
+        summary = (
+            f"Validated {len(sql_test_case_results)} SQL test cases. Success={success}."
+        )
 
         return ValidationResult(
             success=success,
@@ -112,11 +121,15 @@ class CheckValidator:
             summary=summary,
         )
 
-    def _run_sql_test_cases(self, constraint, artifacts, create_table_sql, sql_test_cases, db_conn):
+    def _run_sql_test_cases(
+        self, constraint, artifacts, create_table_sql, sql_test_cases, db_conn
+    ):
         sql_test_case_results = []
 
         db_conn.execute(create_table_sql)
+        log(f"Executing create table SQL: {create_table_sql}", LogTag.INFO)
         db_conn.execute(artifacts.combined_sql)
+        log(f"Executing combined SQL: {artifacts.combined_sql}", LogTag.INFO)
         db_conn.connection.commit()
 
         for case in sql_test_cases:
@@ -124,15 +137,19 @@ class CheckValidator:
             execution_message = ""
 
             try:
-                db_conn.execute(f"TRUNCATE {constraint.table_name} RESTART IDENTITY CASCADE;")
+                db_conn.execute(
+                    f"TRUNCATE {constraint.table_name} RESTART IDENTITY CASCADE;"
+                )
                 db_conn.connection.commit()
 
                 for stmt in case.setup_sql:
                     db_conn.execute(stmt)
+                    log(f"Executing setup SQL: {stmt}", LogTag.INFO)
                 db_conn.connection.commit()
 
                 for stmt in case.candidate_sql:
                     db_conn.execute(stmt)
+                    log(f"Executing candidate SQL: {stmt}", LogTag.INFO)
 
                 db_conn.connection.commit()
                 actual_pass = True
