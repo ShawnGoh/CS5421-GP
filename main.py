@@ -125,6 +125,7 @@ def main():
     statements = split_sql_statements(sql_text)
     
     transformedCheckConstraints = []
+    table_schemas = {}
     banner("Parser Running") 
     for stmt in statements:
         schema = None
@@ -132,14 +133,16 @@ def main():
         raw_checks = extract_raw_checks_from_statement(classified_statement)
         if classified_statement.statement_type == StatementType.CREATE_TABLE:
             schema = extract_table_schema_from_original_sql(classified_statement.original_sql)
+            table_schemas[classified_statement.table_ref.table_name] = schema
                     
         for raw_check in raw_checks:
             condition = CheckExprParser.parse_check_expression(raw_check.check_expr_sql)
             referenced_column_names = collect_referenced_columns(condition)
             referenced_columns = []
+            lookup_schema = schema or table_schemas.get(raw_check.table_name)
             for column_name in referenced_column_names:
-                if schema:
-                    referenced_columns.append((column_name, schema.get(column_name)))    
+                if lookup_schema:
+                    referenced_columns.append((column_name, lookup_schema.get(column_name, "UNKNOWN")))
                 else:
                     referenced_columns.append((column_name, "UNKNOWN"))
                     
@@ -163,9 +166,11 @@ def main():
     test_generator = TestCaseGenerator()
     validator = CheckValidator(evaluator, test_generator)
 
+    constraint_artifacts = []
     for i in range(len(transformedCheckConstraints)):
         constraint = transformedCheckConstraints[i]
         artifacts = generator.generate(constraint)
+        constraint_artifacts.append((constraint, artifacts))
                 
         log_testcase(constraint.constraint_name, constraint.original_check_sql, artifacts.combined_sql)
 
@@ -191,8 +196,10 @@ def main():
     banner("Performance Testing Running") 
     try:
         suite = run_benchmarks(
-            row_level_row_counts=[1_000, 10_000, 100_000, 1_000_000],
-            table_level_row_counts=[100, 200, 500, 1_000],
+            constraint_artifacts=constraint_artifacts,
+            table_schemas=table_schemas,
+            row_counts=[1_000, 10_000, 100_000, 1_000_000],
+            exists_row_counts=[100, 200, 500, 1_000],
             reps=3,
             csv_output_path="benchmark_results.csv",
         )
