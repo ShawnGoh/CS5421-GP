@@ -43,13 +43,13 @@ CREATE TABLE users (
     CONSTRAINT chk_username_pattern_single_char
     CHECK (
         username LIKE 'a_c'
-    ),
+    )
 );
 
 CREATE TABLE flags (
     dummy BOOLEAN,
     CONSTRAINT chk_true_literal
-    CHECK (TRUE)
+    CHECK (TRUE),
 
     CONSTRAINT chk_false_literal
     CHECK (FALSE)
