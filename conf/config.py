@@ -16,3 +16,5 @@ DB_PORT = config.get("db", "port")
 
 SOURCE_SCHEMA = config.get("schema", "source")
 TEST_SCHEMA = config.get("schema", "test")
+
+DEFAULT_LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "log")
