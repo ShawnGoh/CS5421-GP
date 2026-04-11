@@ -2,7 +2,16 @@ import argparse
 import sys
 from pathlib import Path
 
+from psycopg import Cursor
+from psycopg.rows import TupleRow
 
+
+from lib.util import (
+    clone_schema,
+    drop_schema,
+    set_to_test_schema,
+    validate_sql_file_verbose,
+)
 from util.log import log, LogTag, banner, log_testcase, underline
 from compiler.contracts import StatementType
 from lib.client import db_session
@@ -13,10 +22,22 @@ from compiler.evaluator import ConstraintSemanticEvaluator
 from compiler.testgenerator import TestCaseGenerator
 from parser_transformer.classifier import classify_and_extract
 from parser_transformer.file_parser import split_sql_statements
-from parser_transformer.extractor import extract_raw_checks_from_statement, extract_table_schema_from_original_sql
+from parser_transformer.extractor import (
+    extract_raw_checks_from_statement,
+    extract_table_schema_from_original_sql,
+)
 from parser_transformer.transformer import collect_referenced_columns
 from parser_transformer.tokens_parser import CheckExprParser
-from compiler.contracts import OrExpr, AndExpr, CompareExpr, ColumnExpr, ExistsExpr, LiteralExpr, TransformedCheckConstraint
+from compiler.contracts import (
+    OrExpr,
+    AndExpr,
+    CompareExpr,
+    ColumnExpr,
+    ExistsExpr,
+    LiteralExpr,
+    TransformedCheckConstraint,
+)
+
 
 def print_validation_result(constraint, result):
     log(result.summary)
@@ -55,24 +76,20 @@ def validate_sql_file(path_str: str) -> Path:
         raise argparse.ArgumentTypeError(f"Path is not a file: {path}")
 
     if path.suffix.lower() != ".sql":
-        raise argparse.ArgumentTypeError(
-            f"Invalid file type (expected .sql): {path}"
-        )
-        
+        raise argparse.ArgumentTypeError(f"Invalid file type (expected .sql): {path}")
+
     return path
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Check Constraint Compiler - SQL Input Reader"
     )
 
-    parser.add_argument(
-        "file",
-        type=validate_sql_file,
-        help="Path to the .sql file"
-    )
+    parser.add_argument("file", type=validate_sql_file, help="Path to the .sql file")
 
     return parser.parse_args()
+
 
 def format_expr(expr, indent=0):
     pad = "  " * indent
@@ -110,102 +127,133 @@ def format_expr(expr, indent=0):
 
     return f"{pad}{expr}"
 
+
+def setup_test_environment(cur: Cursor[TupleRow]) -> None:
+    log("Setting up isolated test environment...", LogTag.INFO)
+    drop_schema(cursor=cur)
+    clone_schema(cursor=cur)
+    log("Environment ready.", LogTag.INFO)
+
+
 def main():
     banner("Program started. Loading SQL file")
     args = parse_args()
     sql_path: Path = args.file
 
-    try:
-        sql_text = sql_path.read_text(encoding="utf-8")
-        log("Successfully loaded SQL file", LogTag.INFO)
-    except Exception as e:
-        log(f"Failed to read file: {e}", LogTag.ERROR)
-        sys.exit(1)
-    
-    statements = split_sql_statements(sql_text)
-    
-    transformedCheckConstraints = []
-    table_schemas = {}
-    banner("Parser Running") 
-    for stmt in statements:
-        schema = None
-        classified_statement = classify_and_extract(stmt)
-        raw_checks = extract_raw_checks_from_statement(classified_statement)
-        if classified_statement.statement_type == StatementType.CREATE_TABLE:
-            schema = extract_table_schema_from_original_sql(classified_statement.original_sql)
-            table_schemas[classified_statement.table_ref.table_name] = schema
-                    
-        for raw_check in raw_checks:
-            condition = CheckExprParser.parse_check_expression(raw_check.check_expr_sql)
-            referenced_column_names = collect_referenced_columns(condition)
-            referenced_columns = []
-            lookup_schema = schema or table_schemas.get(raw_check.table_name)
-            for column_name in referenced_column_names:
-                if lookup_schema:
-                    referenced_columns.append((column_name, lookup_schema.get(column_name, "UNKNOWN")))
+    with db_session() as db_conn:
+        try:
+            sql_text = sql_path.read_text(encoding="utf-8")
+            log("Successfully loaded SQL file", LogTag.INFO)
+
+            setup_test_environment(cur=db_conn)
+            validate_sql_file_verbose(cursor=db_conn, file_path=sql_path)
+
+            statements = split_sql_statements(sql_text)
+
+            transformedCheckConstraints = []
+            table_schemas = {}
+
+            banner("Parser Running")
+            for stmt in statements:
+                schema = None
+                classified_statement = classify_and_extract(stmt)
+                raw_checks = extract_raw_checks_from_statement(classified_statement)
+                if classified_statement.statement_type == StatementType.CREATE_TABLE:
+                    schema = extract_table_schema_from_original_sql(
+                        classified_statement.original_sql
+                    )
+                    table_schemas[classified_statement.table_ref.table_name] = schema
+
+                for raw_check in raw_checks:
+                    condition = CheckExprParser.parse_check_expression(
+                        raw_check.check_expr_sql
+                    )
+                    referenced_column_names = collect_referenced_columns(condition)
+                    referenced_columns = []
+                    lookup_schema = schema or table_schemas.get(raw_check.table_name)
+                    for column_name in referenced_column_names:
+                        if schema:
+                            referenced_columns.append(
+                                (column_name, schema.get(column_name))
+                            )
+                        else:
+                            referenced_columns.append((column_name, "UNKNOWN"))
+
+                    transformedCheckConstraints.append(
+                        TransformedCheckConstraint(
+                            table_name=raw_check.table_name,
+                            constraint_name=raw_check.constraint_name,
+                            condition=condition,
+                            referenced_columns=referenced_columns,
+                            original_check_sql=raw_check.original_check_sql,
+                        )
+                    )
+
+                    log(f"Condition: {condition}", LogTag.INFO)
+
+            log(
+                f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}",
+                LogTag.INFO,
+            )
+            banner("CodeGen and Validation Running")
+            # log(transformedCheckConstraints)
+            set_to_test_schema(cursor=db_conn)
+
+            generator = CheckCodeGenerator()
+            evaluator = ConstraintSemanticEvaluator()
+            test_generator = TestCaseGenerator()
+            validator = CheckValidator(evaluator, test_generator)
+
+            constraint_artifacts = []
+            for i in range(len(transformedCheckConstraints)):
+                constraint = transformedCheckConstraints[i]
+                artifacts = generator.generate(constraint)
+                constraint_artifacts.append((constraint, artifacts))
+
+                log_testcase(
+                    constraint.constraint_name,
+                    constraint.original_check_sql,
+                    artifacts.combined_sql,
+                )
+
+                if isinstance(constraint.condition, ExistsExpr):
+                    result = validator.validate_exists_constraint(
+                        constraint=constraint,
+                        artifacts=artifacts,
+                        db_conn=db_conn,
+                    )
                 else:
-                    referenced_columns.append((column_name, "UNKNOWN"))
-                    
-            transformedCheckConstraints.append(
-                TransformedCheckConstraint(
-                        table_name = raw_check.table_name,
-                        constraint_name = raw_check.constraint_name,
-                        condition = condition,
-                        referenced_columns = referenced_columns,
-                        original_check_sql = raw_check.original_check_sql
-            ))
-            
-            log(f"Condition: {condition}", LogTag.INFO)
-    
-    log(f"Total TransformedCheckConstraint: {len(transformedCheckConstraints)}", LogTag.INFO)      
-    banner("CodeGen and Validation Running") 
-    # log(transformedCheckConstraints)
+                    result = validator.validate(
+                        constraint=constraint,
+                        artifacts=artifacts,
+                        db_conn=db_conn,
+                    )
 
-    generator = CheckCodeGenerator()
-    evaluator = ConstraintSemanticEvaluator()
-    test_generator = TestCaseGenerator()
-    validator = CheckValidator(evaluator, test_generator)
+                print_validation_result(constraint, result)
 
-    constraint_artifacts = []
-    for i in range(len(transformedCheckConstraints)):
-        constraint = transformedCheckConstraints[i]
-        artifacts = generator.generate(constraint)
-        constraint_artifacts.append((constraint, artifacts))
-                
-        log_testcase(constraint.constraint_name, constraint.original_check_sql, artifacts.combined_sql)
+                if i != len(transformedCheckConstraints) - 1:
+                    underline()
 
-        with db_session() as db_conn:
-            if isinstance(constraint.condition, ExistsExpr):
-                result = validator.validate_exists_constraint(
-                    constraint=constraint,
-                    artifacts=artifacts,
-                    db_conn=db_conn,
-                )
-            else:
-                result = validator.validate(
-                    constraint=constraint,
-                    artifacts=artifacts,
-                    db_conn=db_conn,
-                )
+            banner("Performance Testing Running")
+            run_benchmarks(
+                constraint_artifacts=constraint_artifacts,
+                table_schemas=table_schemas,
+                row_counts=[1_000, 10_000, 100_000, 1_000_000],
+                exists_row_counts=[100, 200, 500, 1_000],
+                reps=3,
+                csv_output_path="benchmark_results.csv",
+            )
 
-        print_validation_result(constraint, result)
-        
-        if i != len(transformedCheckConstraints)-1:
-            underline()
-    
-    banner("Performance Testing Running") 
-    try:
-        suite = run_benchmarks(
-            constraint_artifacts=constraint_artifacts,
-            table_schemas=table_schemas,
-            row_counts=[1_000, 10_000, 100_000, 1_000_000],
-            exists_row_counts=[100, 200, 500, 1_000],
-            reps=3,
-            csv_output_path="benchmark_results.csv",
-        )
-    except Exception as e:
-        log(f"Performance benchmark failed: {e}", LogTag.ERROR)
+            banner("Program Completed. Exiting.")
 
-    banner("Program Completed. Exiting.") 
+        except Exception as e:
+            log(f"Failed to run compiler: {e}", LogTag.ERROR)
+            sys.exit(1)
+        finally:
+            # Ensure connection is closed even if sys.exit is called
+            if db_conn:
+                db_conn.close()
+
+
 if __name__ == "__main__":
     main()
