@@ -1,3 +1,4 @@
+from datetime import datetime
 import time
 import csv
 import statistics
@@ -470,7 +471,7 @@ def run_benchmarks(
             # cleanup
             _reset_conn(conn)
             cur = conn.cursor()
-            cur.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE;")
+            cur.execute(f"DROP TABLE IF EXISTS {table_name} CASCADE;") # type: ignore 
             conn.commit()
             cur.close()
 
@@ -483,7 +484,8 @@ def run_benchmarks(
     suite.print_summary()
 
     if csv_output_path:
-        suite.to_csv(csv_output_path)
+        timestamp = datetime.now().strftime("%d%b_%H%M")
+        suite.to_csv(f"log/{timestamp}_{csv_output_path}")
         log(f"Results written to {csv_output_path}", LogTag.INFO)
 
     return suite
