@@ -46,7 +46,7 @@ def clone_schema(
                 sql.Identifier(table),
             )
         )
-
+    cursor.connection.commit()
     log(f"Successfully cloned {len(tables)} tables to {dest}.", LogTag.INFO)
 
 
@@ -74,8 +74,10 @@ def drop_schema(
     try:
         log(f"Dropping schema: {schema_name} (Cascade={cascade})", LogTag.INFO)
         cursor.execute(query)
+        cursor.connection.commit()
         log(f"Schema '{schema_name}' has been removed successfully.", LogTag.INFO)
     except Exception as e:
+        cursor.connection.rollback()
         log(f"Failed to drop schema '{schema_name}': {e}", LogTag.ERROR)
         raise e
 
